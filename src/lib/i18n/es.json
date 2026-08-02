@@ -1,0 +1,81 @@
+{
+  "nav": {
+    "properties": "Propiedades",
+    "sell": "Vender",
+    "login": "Iniciar sesión",
+    "register": "Crear cuenta"
+  },
+  "search": {
+    "placeholder": "Ciudad, zona o tipo...",
+    "button": "Buscar",
+    "aiSearch": "Buscar con IA",
+    "saveSearch": "Guardar búsqueda",
+    "filters": "Filtros",
+    "results": "propiedades encontradas",
+    "noResults": "No se encontraron propiedades con esos filtros."
+  },
+  "property": {
+    "bedrooms": "dormitorios",
+    "bedroom": "dormitorio",
+    "bathrooms": "baños",
+    "bathroom": "baño",
+    "sqm": "m²",
+    "price": "Precio",
+    "type": "Tipo",
+    "location": "Ubicación",
+    "description": "Descripción",
+    "amenities": "Comodidades",
+    "contact": "Contactar al agente",
+    "similar": "Propiedades similares",
+    "featured": "Destacado",
+    "forSale": "En venta",
+    "forRent": "En alquiler",
+    "calculator": "Calculadora hipotecaria",
+    "share": "Compartir",
+    "compare": "Comparar",
+    "comparing": "Comparando"
+  },
+  "contact": {
+    "name": "Tu nombre",
+    "email": "Tu email",
+    "phone": "Tu teléfono",
+    "message": "Tu mensaje",
+    "send": "Enviar consulta",
+    "sending": "Enviando...",
+    "success": "Consulta enviada con éxito",
+    "error": "Error al enviar. Intenta nuevamente."
+  },
+  "seller": {
+    "dashboard": "Panel Control",
+    "properties": "Mis Propiedades",
+    "leads": "Leads",
+    "analytics": "Analítica",
+    "boosts": "Destacados",
+    "apiKeys": "API Keys",
+    "subscription": "Suscripción",
+    "settings": "Configuración",
+    "logout": "Cerrar Sesión",
+    "newProperty": "Nueva Propiedad"
+  },
+  "common": {
+    "loading": "Cargando...",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "view": "Ver",
+    "back": "Volver",
+    "next": "Siguiente",
+    "previous": "Anterior",
+    "confirm": "Confirmar",
+    "close": "Cerrar",
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "yes": "Sí",
+    "no": "No",
+    "currency": "Moneda",
+    "language": "Idioma",
+    "usd": "Dólares Americanos",
+    "pyg": "Guaraníes"
+  }
+}

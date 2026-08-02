@@ -1,0 +1,81 @@
+{
+  "nav": {
+    "properties": "Properties",
+    "sell": "Sell",
+    "login": "Sign in",
+    "register": "Create account"
+  },
+  "search": {
+    "placeholder": "City, area or type...",
+    "button": "Search",
+    "aiSearch": "Search with AI",
+    "saveSearch": "Save search",
+    "filters": "Filters",
+    "results": "properties found",
+    "noResults": "No properties found with those filters."
+  },
+  "property": {
+    "bedrooms": "bedrooms",
+    "bedroom": "bedroom",
+    "bathrooms": "bathrooms",
+    "bathroom": "bathroom",
+    "sqm": "sqm",
+    "price": "Price",
+    "type": "Type",
+    "location": "Location",
+    "description": "Description",
+    "amenities": "Amenities",
+    "contact": "Contact agent",
+    "similar": "Similar properties",
+    "featured": "Featured",
+    "forSale": "For sale",
+    "forRent": "For rent",
+    "calculator": "Mortgage calculator",
+    "share": "Share",
+    "compare": "Compare",
+    "comparing": "Comparing"
+  },
+  "contact": {
+    "name": "Your name",
+    "email": "Your email",
+    "phone": "Your phone",
+    "message": "Your message",
+    "send": "Send inquiry",
+    "sending": "Sending...",
+    "success": "Inquiry sent successfully",
+    "error": "Error sending. Please try again."
+  },
+  "seller": {
+    "dashboard": "Dashboard",
+    "properties": "My Properties",
+    "leads": "Leads",
+    "analytics": "Analytics",
+    "boosts": "Featured",
+    "apiKeys": "API Keys",
+    "subscription": "Subscription",
+    "settings": "Settings",
+    "logout": "Sign out",
+    "newProperty": "New Property"
+  },
+  "common": {
+    "loading": "Loading...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "view": "View",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "confirm": "Confirm",
+    "close": "Close",
+    "copy": "Copy",
+    "copied": "Copied",
+    "yes": "Yes",
+    "no": "No",
+    "currency": "Currency",
+    "language": "Language",
+    "usd": "US Dollars",
+    "pyg": "Paraguayan Guaraní"
+  }
+}
