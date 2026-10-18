@@ -58,7 +58,6 @@ export const importItemSchema = z.object({
   images: strArr,
   amenities: strArr,
   tag: z.preprocess((v) => (v ? String(v) : null), z.string().max(50).nullable()),
-  featured: bool,
   external_id: z.preprocess((v) => (v == null || v === '' ? null : String(v)), z.string().max(200).nullable()),
   source: z.preprocess(
     (v) => (['xml_import', 'csv_import', 'api_import'].includes(String(v)) ? v : 'api_import'),
@@ -133,7 +132,6 @@ export async function importListings(
         images: item.images,
         amenities: item.amenities,
         tag: item.tag,
-        featured: item.featured,
         agent_id: item.agent_id,
         updated_at: new Date().toISOString(),
       };
@@ -228,6 +226,7 @@ export async function importListings(
           source: item.source,
           external_id: item.external_id,
           status: 'active',
+          featured: false, // solo el webhook de boost puede destacar
         })
         .select('id')
         .single();

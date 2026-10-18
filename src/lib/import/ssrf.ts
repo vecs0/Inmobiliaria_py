@@ -1,36 +1,58 @@
-import { lookup } from 'node:dns/promises';
+import dns from 'node:dns';
+import https from 'node:https';
 import net from 'node:net';
+import type { LookupFunction } from 'node:net';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const TIMEOUT_MS = 15_000;
 
-function isPrivateIPv4(ip: string): boolean {
-  const [a, b] = ip.split('.').map(Number);
-  return (
-    a === 0 || a === 10 || a === 127 ||
-    (a === 100 && b >= 64 && b <= 127) ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 192 && b === 0) ||
-    (a === 198 && (b === 18 || b === 19)) ||
-    a >= 224
-  );
-}
+// Rangos no públicos. net.BlockList normaliza IPv6 (formas comprimidas, mayúsculas, etc.).
+const blocked = new net.BlockList();
+for (const [addr, prefix] of [
+  ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8],
+  ['169.254.0.0', 16], ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.0.2.0', 24],
+  ['192.168.0.0', 16], ['198.18.0.0', 15], ['198.51.100.0', 24], ['203.0.113.0', 24],
+  ['224.0.0.0', 3],
+] as const) blocked.addSubnet(addr, prefix, 'ipv4');
+for (const [addr, prefix] of [
+  ['::', 128], ['::1', 128],
+  ['::ffff:0:0', 96],   // IPv4-mapped
+  ['::', 96],           // IPv4-compatible (deprecado)
+  ['64:ff9b::', 96],    // NAT64
+  ['64:ff9b:1::', 48],  // NAT64 local
+  ['100::', 64],        // discard
+  ['2001::', 32],       // Teredo
+  ['2001:db8::', 32],   // documentación
+  ['2002::', 16],       // 6to4
+  ['fc00::', 7],        // ULA
+  ['fe80::', 10],       // link-local
+  ['ff00::', 8],        // multicast
+] as const) blocked.addSubnet(addr, prefix, 'ipv6');
 
-function isPrivateIp(ip: string): boolean {
-  if (net.isIPv4(ip)) return isPrivateIPv4(ip);
-  const v6 = ip.toLowerCase();
-  if (v6 === '::1' || v6 === '::') return true;
-  const mapped = v6.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (mapped) return isPrivateIPv4(mapped[1]);
-  return v6.startsWith('fc') || v6.startsWith('fd') || v6.startsWith('fe8') ||
-    v6.startsWith('fe9') || v6.startsWith('fea') || v6.startsWith('feb');
+function isBlockedIp(ip: string): boolean {
+  const family = net.isIP(ip);
+  if (family === 4) return blocked.check(ip, 'ipv4');
+  if (family === 6) return blocked.check(ip, 'ipv6');
+  return true;
 }
 
 export class FeedFetchError extends Error {}
 
-/** Descarga un feed remoto con protección SSRF (https, IP pública, timeout, 5MB). */
+// Lookup que valida CADA dirección en el momento de conectar: evita DNS rebinding
+// (la conexión usa exactamente la IP validada, sin segunda resolución).
+const safeLookup: LookupFunction = (hostname, options, callback) => {
+  dns.lookup(hostname, { ...options, all: true }, (err, addresses) => {
+    if (err) return callback(err, '', 0);
+    const list = addresses as dns.LookupAddress[];
+    if (list.length === 0 || list.some((a) => isBlockedIp(a.address))) {
+      return callback(new FeedFetchError('Host no permitido'), '', 0);
+    }
+    if (options.all) return (callback as unknown as (e: null, a: dns.LookupAddress[]) => void)(null, list);
+    callback(null, list[0].address, list[0].family);
+  });
+};
+
+/** Descarga un feed remoto con protección SSRF (https, IP pública fijada, sin redirects, timeout, 5MB). */
 export async function fetchFeedText(rawUrl: string): Promise<string> {
   let url: URL;
   try { url = new URL(rawUrl); } catch { throw new FeedFetchError('URL inválida'); }
@@ -38,44 +60,38 @@ export async function fetchFeedText(rawUrl: string): Promise<string> {
   if (url.username || url.password) throw new FeedFetchError('URL con credenciales no permitida');
 
   const host = url.hostname.replace(/^\[|\]$/g, '');
-  const addrs = net.isIP(host)
-    ? [{ address: host }]
-    : await lookup(host, { all: true }).catch(() => {
-        throw new FeedFetchError('No se pudo resolver el host');
-      });
-  if (addrs.length === 0 || addrs.some((a) => isPrivateIp(a.address))) {
-    throw new FeedFetchError('Host no permitido');
-  }
+  if (net.isIP(host) && isBlockedIp(host)) throw new FeedFetchError('Host no permitido');
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  try {
-    // redirect: 'error' evita saltar a hosts internos vía 3xx
-    const res = await fetch(url, { signal: controller.signal, redirect: 'error' });
-    if (!res.ok) throw new FeedFetchError(`El feed respondió ${res.status}`);
-    const declared = Number(res.headers.get('content-length') ?? 0);
-    if (declared > MAX_BYTES) throw new FeedFetchError('El feed supera 5MB');
-    if (!res.body) throw new FeedFetchError('Respuesta vacía');
-
-    const reader = res.body.getReader();
-    const chunks: Uint8Array[] = [];
-    let total = 0;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > MAX_BYTES) {
-        controller.abort();
-        throw new FeedFetchError('El feed supera 5MB');
+  return new Promise<string>((resolve, reject) => {
+    const req = https.get(url, { lookup: safeLookup, timeout: TIMEOUT_MS }, (res) => {
+      const status = res.statusCode ?? 0;
+      // Sin seguir redirects: un 3xx podría apuntar a un host interno
+      if (status < 200 || status >= 300) {
+        res.resume();
+        return reject(new FeedFetchError(`El feed respondió ${status}`));
       }
-      chunks.push(value);
-    }
-    return Buffer.concat(chunks).toString('utf8');
-  } catch (e) {
-    if (e instanceof FeedFetchError) throw e;
-    if ((e as Error).name === 'AbortError') throw new FeedFetchError('Tiempo de espera agotado');
-    throw new FeedFetchError('No se pudo descargar el feed');
-  } finally {
-    clearTimeout(timer);
-  }
+      const declared = Number(res.headers['content-length'] ?? 0);
+      if (declared > MAX_BYTES) {
+        res.destroy();
+        return reject(new FeedFetchError('El feed supera 5MB'));
+      }
+      const chunks: Buffer[] = [];
+      let total = 0;
+      res.on('data', (chunk: Buffer) => {
+        total += chunk.byteLength;
+        if (total > MAX_BYTES) {
+          res.destroy();
+          reject(new FeedFetchError('El feed supera 5MB'));
+          return;
+        }
+        chunks.push(chunk);
+      });
+      res.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+      res.on('error', () => reject(new FeedFetchError('No se pudo descargar el feed')));
+    });
+    req.on('timeout', () => req.destroy(new FeedFetchError('Tiempo de espera agotado')));
+    req.on('error', (e) =>
+      reject(e instanceof FeedFetchError ? e : new FeedFetchError('No se pudo descargar el feed')),
+    );
+  });
 }
