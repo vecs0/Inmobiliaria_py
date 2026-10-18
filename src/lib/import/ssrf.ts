@@ -63,7 +63,9 @@ export async function fetchFeedText(rawUrl: string): Promise<string> {
   if (net.isIP(host) && isBlockedIp(host)) throw new FeedFetchError('Host no permitido');
 
   return new Promise<string>((resolve, reject) => {
-    const req = https.get(url, { lookup: safeLookup, timeout: TIMEOUT_MS }, (res) => {
+    // Deadline total (el timeout de socket solo mide inactividad; un goteo lento lo evadiría)
+    const signal = AbortSignal.timeout(TIMEOUT_MS);
+    const req = https.get(url, { lookup: safeLookup, timeout: TIMEOUT_MS, signal }, (res) => {
       const status = res.statusCode ?? 0;
       // Sin seguir redirects: un 3xx podría apuntar a un host interno
       if (status < 200 || status >= 300) {
@@ -87,11 +89,17 @@ export async function fetchFeedText(rawUrl: string): Promise<string> {
         chunks.push(chunk);
       });
       res.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-      res.on('error', () => reject(new FeedFetchError('No se pudo descargar el feed')));
+      res.on('error', () =>
+        reject(new FeedFetchError(signal.aborted ? 'Tiempo de espera agotado' : 'No se pudo descargar el feed')),
+      );
     });
     req.on('timeout', () => req.destroy(new FeedFetchError('Tiempo de espera agotado')));
     req.on('error', (e) =>
-      reject(e instanceof FeedFetchError ? e : new FeedFetchError('No se pudo descargar el feed')),
+      reject(
+        e instanceof FeedFetchError ? e
+          : signal.aborted ? new FeedFetchError('Tiempo de espera agotado')
+          : new FeedFetchError('No se pudo descargar el feed'),
+      ),
     );
   });
 }

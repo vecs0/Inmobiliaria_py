@@ -7,7 +7,10 @@ export function safeRedirect(value: string | null | undefined): string | null {
     const base = 'http://internal.invalid';
     const u = new URL(v, base);
     if (u.origin !== base) return null;
-    return u.pathname + u.search + u.hash;
+    const out = u.pathname + u.search + u.hash;
+    // Validar la salida normalizada: "/.//evil.com" se normaliza a "//evil.com"
+    if (!out.startsWith('/') || out.startsWith('//')) return null;
+    return out;
   } catch {
     return null;
   }
