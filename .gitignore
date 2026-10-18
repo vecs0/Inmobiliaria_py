@@ -44,3 +44,6 @@ yarn-error.log*
 # sqlite / local db
 *.db
 *.sqlite
+
+# supabase cli local state
+supabase/.temp/

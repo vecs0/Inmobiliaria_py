@@ -1,15 +1,12 @@
 'use server';
 
-import { createClient } from './server';
-import { createClient as createAdmin } from '@supabase/supabase-js';
 import { createHash, randomBytes } from 'crypto';
+import { createClient } from './server';
+import { createAdminClient } from './admin';
 import { ApiKey } from './types';
 
-const supabaseAdmin = createAdmin(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-);
+const MAX_ACTIVE_KEYS = 5;
+const PUBLIC_COLUMNS = 'id, seller_id, name, key_prefix, active, requests_today, requests_total, last_used_at, created_at';
 
 function generateKey(): { rawKey: string; keyPrefix: string; keyHash: string } {
   const random = randomBytes(24).toString('base64url');
@@ -19,6 +16,25 @@ function generateKey(): { rawKey: string; keyPrefix: string; keyHash: string } {
   return { rawKey, keyPrefix, keyHash };
 }
 
+function toApiKey(row: Record<string, unknown>): ApiKey {
+  return { ...(row as unknown as ApiKey), key_hash: '' }; // el hash nunca sale al cliente
+}
+
+/** Devuelve el user id si el usuario es vendedor tipo 'empresa'; si no, null. */
+async function requireCompanySeller(): Promise<string | null> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data: seller } = await createAdminClient()
+    .from('seller_profiles')
+    .select('seller_type')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  return seller?.seller_type === 'empresa' ? user.id : null;
+}
+
 export async function getApiKeys(): Promise<ApiKey[]> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -26,63 +42,63 @@ export async function getApiKeys(): Promise<ApiKey[]> {
 
   const { data } = await supabase
     .from('api_keys')
-    .select('*')
+    .select(PUBLIC_COLUMNS)
     .eq('seller_id', user.id)
     .order('created_at', { ascending: false });
 
-  return (data ?? []) as ApiKey[];
+  return (data ?? []).map((r) => toApiKey(r as Record<string, unknown>));
 }
 
 export async function createApiKey(name: string): Promise<{ key: ApiKey; rawKey: string } | null> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  const userId = await requireCompanySeller();
+  if (!userId) return null;
 
-  // Límite: 5 keys por seller
-  const { count } = await supabase
+  const cleanName = String(name ?? '').trim().slice(0, 80);
+  if (!cleanName) return null;
+
+  const db = createAdminClient();
+  const { count, error: countErr } = await db
     .from('api_keys')
-    .select('*', { count: 'exact', head: true })
-    .eq('seller_id', user.id)
+    .select('id', { count: 'exact', head: true })
+    .eq('seller_id', userId)
     .eq('active', true);
-
-  if ((count ?? 0) >= 5) return null;
+  if (countErr || (count ?? 0) >= MAX_ACTIVE_KEYS) return null;
 
   const { rawKey, keyPrefix, keyHash } = generateKey();
-
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('api_keys')
-    .insert({ seller_id: user.id, name: name.trim(), key_prefix: keyPrefix, key_hash: keyHash })
-    .select()
+    .insert({ seller_id: userId, name: cleanName, key_prefix: keyPrefix, key_hash: keyHash })
+    .select(PUBLIC_COLUMNS)
     .single();
 
   if (error || !data) return null;
-  return { key: data as ApiKey, rawKey };
+  return { key: toApiKey(data as Record<string, unknown>), rawKey };
 }
 
 export async function revokeApiKey(keyId: string): Promise<boolean> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return false;
+  const userId = await requireCompanySeller();
+  if (!userId) return false;
 
-  const { error } = await supabase
+  const { data, error } = await createAdminClient()
     .from('api_keys')
     .update({ active: false })
     .eq('id', keyId)
-    .eq('seller_id', user.id);
+    .eq('seller_id', userId)
+    .select('id');
 
-  return !error;
+  return !error && (data?.length ?? 0) > 0;
 }
 
 export async function deleteApiKey(keyId: string): Promise<boolean> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return false;
+  const userId = await requireCompanySeller();
+  if (!userId) return false;
 
-  const { error } = await supabase
+  const { data, error } = await createAdminClient()
     .from('api_keys')
     .delete()
     .eq('id', keyId)
-    .eq('seller_id', user.id);
+    .eq('seller_id', userId)
+    .select('id');
 
-  return !error;
+  return !error && (data?.length ?? 0) > 0;
 }

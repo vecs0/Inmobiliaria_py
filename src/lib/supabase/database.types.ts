@@ -19,6 +19,9 @@ export type Database = {
           created_at: string | null
           email: string
           id: string
+          invite_expires_at: string | null
+          invite_token: string | null
+          invited_by: string | null
           name: string
           phone: string
           photo: string
@@ -30,6 +33,9 @@ export type Database = {
           created_at?: string | null
           email: string
           id?: string
+          invite_expires_at?: string | null
+          invite_token?: string | null
+          invited_by?: string | null
           name: string
           phone: string
           photo: string
@@ -41,12 +47,62 @@ export type Database = {
           created_at?: string | null
           email?: string
           id?: string
+          invite_expires_at?: string | null
+          invite_token?: string | null
+          invited_by?: string | null
           name?: string
           phone?: string
           photo?: string
           title?: string
           updated_at?: string | null
           whatsapp?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agents_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "seller_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      api_keys: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          key_hash: string
+          key_prefix: string
+          last_used_at: string | null
+          name: string
+          requests_today: number
+          requests_total: number
+          seller_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          key_hash: string
+          key_prefix: string
+          last_used_at?: string | null
+          name: string
+          requests_today?: number
+          requests_total?: number
+          seller_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          key_hash?: string
+          key_prefix?: string
+          last_used_at?: string | null
+          name?: string
+          requests_today?: number
+          requests_total?: number
+          seller_id?: string
         }
         Relationships: []
       }
@@ -74,40 +130,121 @@ export type Database = {
             foreignKeyName: "favorites_property_id_fkey"
             columns: ["property_id"]
             isOneToOne: false
-            referencedRelation: "properties"
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "favorites_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties_full"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      import_feeds: {
+        Row: {
+          active: boolean
+          created_at: string
+          format: string
+          frequency_minutes: number
+          id: string
+          last_error: string | null
+          last_status: string | null
+          last_synced_at: string | null
+          name: string | null
+          seller_profile_id: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          format?: string
+          frequency_minutes?: number
+          id?: string
+          last_error?: string | null
+          last_status?: string | null
+          last_synced_at?: string | null
+          name?: string | null
+          seller_profile_id: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          format?: string
+          frequency_minutes?: number
+          id?: string
+          last_error?: string | null
+          last_status?: string | null
+          last_synced_at?: string | null
+          name?: string | null
+          seller_profile_id?: string
+          updated_at?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_feeds_seller_profile_id_fkey"
+            columns: ["seller_profile_id"]
+            isOneToOne: false
+            referencedRelation: "seller_profiles"
             referencedColumns: ["id"]
           },
         ]
       }
       leads: {
         Row: {
+          assigned_to: string | null
+          buyer_id: string | null
           created_at: string | null
           email: string
           id: string
+          is_read: boolean | null
           message: string
           name: string
           phone: string | null
           property_id: string | null
+          score: number | null
+          score_details: Json | null
+          seller_id: string | null
+          source: string | null
           status: string | null
         }
         Insert: {
+          assigned_to?: string | null
+          buyer_id?: string | null
           created_at?: string | null
           email: string
           id?: string
+          is_read?: boolean | null
           message: string
           name: string
           phone?: string | null
           property_id?: string | null
+          score?: number | null
+          score_details?: Json | null
+          seller_id?: string | null
+          source?: string | null
           status?: string | null
         }
         Update: {
+          assigned_to?: string | null
+          buyer_id?: string | null
           created_at?: string | null
           email?: string
           id?: string
+          is_read?: boolean | null
           message?: string
           name?: string
           phone?: string | null
           property_id?: string | null
+          score?: number | null
+          score_details?: Json | null
+          seller_id?: string | null
+          source?: string | null
           status?: string | null
         }
         Relationships: [
@@ -115,7 +252,14 @@ export type Database = {
             foreignKeyName: "leads_property_id_fkey"
             columns: ["property_id"]
             isOneToOne: false
-            referencedRelation: "properties"
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties_full"
             referencedColumns: ["id"]
           },
         ]
@@ -127,6 +271,7 @@ export type Database = {
           created_at: string | null
           currency: string
           description: string
+          embedding: string | null
           entity_id: string
           expires_at: string | null
           external_id: string | null
@@ -151,6 +296,7 @@ export type Database = {
           created_at?: string | null
           currency?: string
           description: string
+          embedding?: string | null
           entity_id: string
           expires_at?: string | null
           external_id?: string | null
@@ -175,6 +321,7 @@ export type Database = {
           created_at?: string | null
           currency?: string
           description?: string
+          embedding?: string | null
           entity_id?: string
           expires_at?: string | null
           external_id?: string | null
@@ -230,6 +377,7 @@ export type Database = {
           status: string
           stripe_invoice_id: string | null
           stripe_payment_intent_id: string | null
+          stripe_session_id: string | null
           stripe_subscription_id: string | null
           user_id: string | null
         }
@@ -245,6 +393,7 @@ export type Database = {
           status?: string
           stripe_invoice_id?: string | null
           stripe_payment_intent_id?: string | null
+          stripe_session_id?: string | null
           stripe_subscription_id?: string | null
           user_id?: string | null
         }
@@ -260,6 +409,7 @@ export type Database = {
           status?: string
           stripe_invoice_id?: string | null
           stripe_payment_intent_id?: string | null
+          stripe_session_id?: string | null
           stripe_subscription_id?: string | null
           user_id?: string | null
         }
@@ -405,6 +555,48 @@ export type Database = {
           },
         ]
       }
+      property_boosts: {
+        Row: {
+          created_at: string
+          expires_at: string | null
+          id: string
+          plan_key: string
+          price_usd: number
+          property_id: string
+          seller_id: string
+          starts_at: string | null
+          status: string
+          stripe_payment_intent: string | null
+          stripe_session_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          plan_key: string
+          price_usd: number
+          property_id: string
+          seller_id: string
+          starts_at?: string | null
+          status?: string
+          stripe_payment_intent?: string | null
+          stripe_session_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          plan_key?: string
+          price_usd?: number
+          property_id?: string
+          seller_id?: string
+          starts_at?: string | null
+          status?: string
+          stripe_payment_intent?: string | null
+          stripe_session_id?: string | null
+        }
+        Relationships: []
+      }
       property_entities: {
         Row: {
           address: string | null
@@ -462,6 +654,132 @@ export type Database = {
         }
         Relationships: []
       }
+      property_views: {
+        Row: {
+          created_at: string
+          id: number
+          ip_hash: string | null
+          property_id: string
+          seller_id: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          ip_hash?: string | null
+          property_id: string
+          seller_id?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          ip_hash?: string | null
+          property_id?: string
+          seller_id?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          created_at: string
+          id: string
+          subscription: Json
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          subscription: Json
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          subscription?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
+      saved_searches: {
+        Row: {
+          active: boolean
+          created_at: string
+          filters: Json
+          id: string
+          last_notified_at: string | null
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          filters?: Json
+          id?: string
+          last_notified_at?: string | null
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          filters?: Json
+          id?: string
+          last_notified_at?: string | null
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      search_history: {
+        Row: {
+          action: string
+          created_at: string
+          filters: Json | null
+          id: string
+          property_id: string | null
+          search_query: string | null
+          user_id: string
+        }
+        Insert: {
+          action?: string
+          created_at?: string
+          filters?: Json | null
+          id?: string
+          property_id?: string | null
+          search_query?: string | null
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          filters?: Json | null
+          id?: string
+          property_id?: string | null
+          search_query?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "search_history_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "search_history_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties_full"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       seller_profiles: {
         Row: {
           cedula: string | null
@@ -470,6 +788,7 @@ export type Database = {
           full_name: string | null
           has_website: boolean | null
           id: string
+          max_agents: number | null
           max_properties: number | null
           phone: string | null
           properties_count: number | null
@@ -493,6 +812,7 @@ export type Database = {
           full_name?: string | null
           has_website?: boolean | null
           id?: string
+          max_agents?: number | null
           max_properties?: number | null
           phone?: string | null
           properties_count?: number | null
@@ -516,6 +836,7 @@ export type Database = {
           full_name?: string | null
           has_website?: boolean | null
           id?: string
+          max_agents?: number | null
           max_properties?: number | null
           phone?: string | null
           properties_count?: number | null
@@ -531,6 +852,24 @@ export type Database = {
           updated_at?: string | null
           user_id?: string | null
           website_url?: string | null
+        }
+        Relationships: []
+      }
+      stripe_events: {
+        Row: {
+          created_at: string
+          event_id: string
+          type: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          type?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          type?: string | null
         }
         Relationships: []
       }
@@ -709,9 +1048,56 @@ export type Database = {
       }
     }
     Functions: {
+      decrement_properties_count: {
+        Args: { profile_id: string }
+        Returns: undefined
+      }
+      expire_property_boosts: { Args: never; Returns: undefined }
+      increment_api_key_usage: {
+        Args: { p_key_id: string }
+        Returns: number
+      }
       increment_properties_count: {
         Args: { profile_id: string }
         Returns: undefined
+      }
+      is_admin: { Args: never; Returns: boolean }
+      match_properties: {
+        Args: {
+          match_count?: number
+          match_threshold?: number
+          query_embedding: string
+        }
+        Returns: {
+          bathrooms: number
+          bedrooms: number
+          featured: boolean
+          id: string
+          images: string[]
+          location: string
+          price: number
+          similarity: number
+          sqm: number
+          title: string
+          type: string
+        }[]
+      }
+      reset_api_key_daily_counters: { Args: never; Returns: undefined }
+      similar_properties: {
+        Args: { match_count?: number; source_property_id: string }
+        Returns: {
+          bathrooms: number
+          bedrooms: number
+          featured: boolean
+          id: string
+          images: string[]
+          location: string
+          price: number
+          similarity: number
+          sqm: number
+          title: string
+          type: string
+        }[]
       }
     }
     Enums: {

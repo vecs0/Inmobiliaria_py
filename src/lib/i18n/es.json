@@ -3,7 +3,22 @@
     "properties": "Propiedades",
     "sell": "Vender",
     "login": "Iniciar sesión",
-    "register": "Crear cuenta"
+    "register": "Crear cuenta",
+    "home": "Inicio",
+    "seller": "Vendedor",
+    "back": "Volver",
+    "myPanel": "Mi panel",
+    "mySpace": "Mi espacio",
+    "myProperties": "Mis propiedades",
+    "inquiries": "Consultas",
+    "favorites": "Favoritos",
+    "alerts": "Alertas",
+    "logout": "Cerrar sesión",
+    "signIn": "Ingresar",
+    "signUp": "Registrarse",
+    "property": "Propiedad",
+    "sellerPortal": "Portal vendedor",
+    "menu": "Menú"
   },
   "search": {
     "placeholder": "Ciudad, zona o tipo...",

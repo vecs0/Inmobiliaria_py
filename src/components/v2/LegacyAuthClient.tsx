@@ -1,21 +1,55 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/client';
 import { createSellerProfile } from '@/lib/actions/seller';
 import { homePathForRole, resolveAppRole } from '@/lib/auth/role-utils';
+import { safeRedirect } from '@/app/auth/safe-redirect';
 
 type AccountType = 'buyer' | 'particular' | 'empresa' | null;
 
+const emailSchema = z.email({ message: 'Ingresá un email válido' });
+
+const loginSchema = z.object({
+  email: emailSchema,
+  password: z.string().min(1, { message: 'Ingresá tu contraseña' }),
+});
+
+const personalSchema = z.object({
+  name: z.string().trim().min(2, { message: 'Completá tu nombre' }),
+  phone: z.string().trim().max(30).optional(),
+});
+
+const companySchema = z.object({
+  companyName: z.string().trim().min(2, { message: 'Completá la razón social' }),
+  ruc: z.string().trim().regex(/^\d{4,10}-?\d$/, { message: 'RUC inválido (ej: 80012345-6)' }),
+});
+
+const credentialsSchema = z
+  .object({
+    email: emailSchema,
+    password: z.string().min(8, { message: 'La contraseña debe tener al menos 8 caracteres' }),
+    confirm: z.string(),
+  })
+  .refine((d) => d.password === d.confirm, { message: 'Las contraseñas no coinciden', path: ['confirm'] });
+
+function firstIssue(err: z.ZodError): string {
+  return err.issues[0]?.message ?? 'Revisá los datos ingresados';
+}
+
 export function LegacyAuthClient({ mode }: { mode: 'login' | 'register' }) {
   const router = useRouter();
-  const supabase = createClient();
+  const searchParams = useSearchParams();
+  const supabase = useMemo(() => createClient(), []);
   const isLogin = mode === 'login';
+  const redirectTo = safeRedirect(searchParams.get('redirect'));
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [accountType, setAccountType] = useState<AccountType>(null);
@@ -24,16 +58,18 @@ export function LegacyAuthClient({ mode }: { mode: 'login' | 'register' }) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [checkEmail, setCheckEmail] = useState(false);
 
   const totalSteps = isLogin ? 1 : 3;
+  const switchHref = (isLogin ? '/auth/register' : '/auth/login') + (redirectTo ? `?redirect=${encodeURIComponent(redirectTo)}` : '');
 
-  useEffect(() => {
-    setStep(1);
-    setError(null);
-    setAccountType(null);
-  }, [mode]);
-
+  // Login y registro son rutas distintas → el componente se remonta y el estado arranca limpio.
   async function redirectAfterAuth(userId: string) {
+    if (redirectTo) {
+      router.push(redirectTo);
+      router.refresh();
+      return;
+    }
     const [{ data: profile }, { data: seller }] = await Promise.all([
       supabase.from('profiles').select('role').eq('id', userId).maybeSingle(),
       supabase.from('seller_profiles').select('seller_type').eq('user_id', userId).maybeSingle(),
@@ -50,13 +86,11 @@ export function LegacyAuthClient({ mode }: { mode: 'login' | 'register' }) {
       return;
     }
     if (step === 2) {
-      if (!name) {
-        setError('Completá tu nombre');
-        return;
-      }
-      if (accountType === 'empresa' && (!companyName || !ruc)) {
-        setError('Completá los datos de la empresa');
-        return;
+      const p = personalSchema.safeParse({ name, phone });
+      if (!p.success) return setError(firstIssue(p.error));
+      if (accountType === 'empresa') {
+        const c = companySchema.safeParse({ companyName, ruc });
+        if (!c.success) return setError(firstIssue(c.error));
       }
     }
     setStep(step + 1);
@@ -65,14 +99,12 @@ export function LegacyAuthClient({ mode }: { mode: 'login' | 'register' }) {
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!email || !password) {
-      setError('Completá todos los campos');
-      return;
-    }
+    const parsed = loginSchema.safeParse({ email: email.trim(), password });
+    if (!parsed.success) return setError(firstIssue(parsed.error));
     setLoading(true);
-    const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error: authError } = await supabase.auth.signInWithPassword(parsed.data);
     if (authError) {
-      setError(authError.message);
+      setError(authError.message === 'Invalid login credentials' ? 'Email o contraseña incorrectos' : authError.message);
       setLoading(false);
       return;
     }
@@ -83,20 +115,26 @@ export function LegacyAuthClient({ mode }: { mode: 'login' | 'register' }) {
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!email || !password || !name || !accountType) {
-      setError('Completá todos los campos');
-      return;
-    }
+    if (!accountType) return setError('Elegí un tipo de cuenta');
+    const parsed = credentialsSchema.safeParse({ email: email.trim(), password, confirm });
+    if (!parsed.success) return setError(firstIssue(parsed.error));
+
     setLoading(true);
     const profileRole =
       accountType === 'empresa' ? 'seller_empresa' : accountType === 'particular' ? 'seller' : 'user';
+    const home = accountType === 'buyer' ? '/comprador' : '/vendedor';
+    const next = redirectTo ?? home;
     const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
+      email: parsed.data.email,
+      password: parsed.data.password,
       options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
         data: {
           full_name: accountType === 'empresa' ? companyName : name,
-          seller_type: accountType,
+          phone: phone || null,
+          seller_type: accountType === 'buyer' ? null : accountType,
+          company_name: accountType === 'empresa' ? companyName : null,
+          ruc: accountType === 'empresa' ? ruc : null,
           role: profileRole,
         },
       },
@@ -111,8 +149,17 @@ export function LegacyAuthClient({ mode }: { mode: 'login' | 'register' }) {
       setLoading(false);
       return;
     }
+
+    // Confirmación de email activada: no hay sesión todavía → no podemos crear el perfil de vendedor
+    // desde el cliente (RLS). Debe crearlo un trigger/callback al confirmar.
+    if (!authData.session) {
+      setCheckEmail(true);
+      setLoading(false);
+      return;
+    }
+
     if (accountType === 'particular' || accountType === 'empresa') {
-      await createSellerProfile({
+      const res = await createSellerProfile({
         userId: authData.user.id,
         accountType,
         fullName: accountType === 'empresa' ? companyName : name,
@@ -121,10 +168,13 @@ export function LegacyAuthClient({ mode }: { mode: 'login' | 'register' }) {
         ruc: accountType === 'empresa' ? ruc : undefined,
         hasWebsite: false,
       });
-      router.push('/vendedor');
-    } else {
-      router.push('/comprador');
+      if (res && 'success' in res && !res.success) {
+        setError(res.error ?? 'No pudimos crear tu perfil de vendedor. Probá ingresar de nuevo.');
+        setLoading(false);
+        return;
+      }
     }
+    router.push(next);
     router.refresh();
     setLoading(false);
   }
@@ -157,16 +207,16 @@ export function LegacyAuthClient({ mode }: { mode: 'login' | 'register' }) {
           </div>
           <div className="auth-meta">
             <div className="auth-meta-item">
-              <div className="amk">PROPIEDADES</div>
-              <div className="amv">500<span className="unit">+</span></div>
+              <div className="amk">OPERACIONES</div>
+              <div className="amv">Venta<span className="unit">+ alquiler</span></div>
             </div>
             <div className="auth-meta-item">
-              <div className="amk">ZONAS</div>
-              <div className="amv">15<span className="unit">PY</span></div>
+              <div className="amk">COBERTURA</div>
+              <div className="amv">Todo<span className="unit">PY</span></div>
             </div>
             <div className="auth-meta-item">
-              <div className="amk">VOLUMEN</div>
-              <div className="amv">50M<span className="unit">USD</span></div>
+              <div className="amk">BÚSQUEDA</div>
+              <div className="amv">IA<span className="unit">semántica</span></div>
             </div>
           </div>
         </div>
@@ -207,11 +257,27 @@ export function LegacyAuthClient({ mode }: { mode: 'login' | 'register' }) {
             {!isLogin && step === 3 && 'Email y contraseña para acceder a tu cuenta.'}
           </p>
 
+          {checkEmail && (
+            <div className="auth-form" role="status">
+              <h2 className="auth-title" style={{ fontSize: 28 }}>
+                Revisá tu <span className="italic-accent">email.</span>
+              </h2>
+              <p className="auth-sub">
+                Te enviamos un enlace de confirmación a <strong>{email}</strong>. Abrilo para activar tu cuenta
+                {accountType && accountType !== 'buyer' ? ' y terminar de configurar tu perfil de vendedor' : ''}.
+              </p>
+              <Link href={'/auth/login' + (redirectTo ? `?redirect=${encodeURIComponent(redirectTo)}` : '')} className="auth-submit" style={{ textDecoration: 'none' }}>
+                <span className="as-label">Ir a ingresar</span>
+                <span className="as-arrow">→</span>
+              </Link>
+            </div>
+          )}
+
           {isLogin && (
-            <form className="auth-form" onSubmit={handleLogin}>
-              <AuthField label="Correo electrónico" type="email" value={email} onChange={setEmail} placeholder="vos@ejemplo.com.py" />
-              <AuthField label="Contraseña" type="password" value={password} onChange={setPassword} placeholder="••••••••" rightLabel={<Link href="/auth/reset-password" className="forgot">¿Olvidaste?</Link>} />
-              {error && <div className="auth-error">{error}</div>}
+            <form className="auth-form" onSubmit={handleLogin} noValidate>
+              <AuthField id="login-email" label="Correo electrónico" type="email" autoComplete="email" value={email} onChange={setEmail} placeholder="vos@ejemplo.com.py" />
+              <AuthField id="login-password" label="Contraseña" type="password" autoComplete="current-password" value={password} onChange={setPassword} placeholder="••••••••" rightLabel={<Link href="/auth/reset-password" className="forgot">¿Olvidaste?</Link>} />
+              {error && <div className="auth-error" role="alert">{error}</div>}
               <button type="submit" className={`auth-submit ${loading ? 'loading' : ''}`} disabled={loading}>
                 <span className="as-label">{loading ? 'Ingresando' : 'Ingresar'}</span>
                 <span className="as-arrow">{loading ? <Spinner /> : '→'}</span>
@@ -220,14 +286,14 @@ export function LegacyAuthClient({ mode }: { mode: 'login' | 'register' }) {
             </form>
           )}
 
-          {!isLogin && step === 1 && (
+          {!isLogin && !checkEmail && step === 1 && (
             <div className="auth-form">
               <div className="auth-type-list">
                 <AccountTypeCard active={accountType === 'buyer'} onClick={() => setAccountType('buyer')} title="Busco propiedades" desc="Encontrá tu próxima propiedad. Sin costo." icon="search" />
                 <AccountTypeCard active={accountType === 'particular'} onClick={() => setAccountType('particular')} title="Tengo propiedades" desc="Soy particular y quiero publicar." icon="home" />
                 <AccountTypeCard active={accountType === 'empresa'} onClick={() => setAccountType('empresa')} title="Tengo una empresa" desc="Inmobiliaria o constructora." icon="building" />
               </div>
-              {error && <div className="auth-error">{error}</div>}
+              {error && <div className="auth-error" role="alert">{error}</div>}
               <button type="button" onClick={nextStep} className="auth-submit">
                 <span className="as-label">Continuar</span>
                 <span className="as-arrow">→</span>
@@ -235,17 +301,17 @@ export function LegacyAuthClient({ mode }: { mode: 'login' | 'register' }) {
             </div>
           )}
 
-          {!isLogin && step === 2 && (
+          {!isLogin && !checkEmail && step === 2 && (
             <div className="auth-form">
-              <AuthField label="Nombre y apellido" value={name} onChange={setName} placeholder="María José Benítez" />
-              <AuthField label="WhatsApp" hint="+595" type="tel" value={phone} onChange={setPhone} placeholder="981 234 567" />
+              <AuthField id="reg-name" autoComplete="name" label="Nombre y apellido" value={name} onChange={setName} placeholder="María José Benítez" />
+              <AuthField id="reg-phone" autoComplete="tel" required={false} label="WhatsApp" hint="+595" type="tel" value={phone} onChange={setPhone} placeholder="981 234 567" />
               {accountType === 'empresa' && (
                 <>
-                  <AuthField label="Razón social" value={companyName} onChange={setCompanyName} placeholder="Inmobiliaria del Este S.A." />
-                  <AuthField label="RUC" value={ruc} onChange={setRuc} placeholder="80012345-6" />
+                  <AuthField id="reg-company" autoComplete="organization" label="Razón social" value={companyName} onChange={setCompanyName} placeholder="Inmobiliaria del Este S.A." />
+                  <AuthField id="reg-ruc" label="RUC" value={ruc} onChange={setRuc} placeholder="80012345-6" />
                 </>
               )}
-              {error && <div className="auth-error">{error}</div>}
+              {error && <div className="auth-error" role="alert">{error}</div>}
               <div className="auth-row">
                 <button type="button" onClick={() => setStep(1)} className="auth-back-btn">← Volver</button>
                 <button type="button" onClick={nextStep} className="auth-submit">
@@ -256,11 +322,12 @@ export function LegacyAuthClient({ mode }: { mode: 'login' | 'register' }) {
             </div>
           )}
 
-          {!isLogin && step === 3 && (
-            <form className="auth-form" onSubmit={handleRegister}>
-              <AuthField label="Correo electrónico" type="email" value={email} onChange={setEmail} placeholder="vos@ejemplo.com.py" />
-              <AuthField label="Contraseña" type="password" value={password} onChange={setPassword} placeholder="Mínimo 8 caracteres" />
-              {error && <div className="auth-error">{error}</div>}
+          {!isLogin && !checkEmail && step === 3 && (
+            <form className="auth-form" onSubmit={handleRegister} noValidate>
+              <AuthField id="reg-email" label="Correo electrónico" type="email" autoComplete="email" value={email} onChange={setEmail} placeholder="vos@ejemplo.com.py" />
+              <AuthField id="reg-password" label="Contraseña" type="password" autoComplete="new-password" value={password} onChange={setPassword} placeholder="Mínimo 8 caracteres" />
+              <AuthField id="reg-confirm" label="Repetir contraseña" type="password" autoComplete="new-password" value={confirm} onChange={setConfirm} placeholder="Repetí la contraseña" />
+              {error && <div className="auth-error" role="alert">{error}</div>}
               <div className="auth-row">
                 <button type="button" onClick={() => setStep(2)} className="auth-back-btn">← Volver</button>
                 <button type="submit" className={`auth-submit ${loading ? 'loading' : ''}`} disabled={loading}>
@@ -274,7 +341,7 @@ export function LegacyAuthClient({ mode }: { mode: 'login' | 'register' }) {
 
           <div className="auth-switch">
             {isLogin ? '¿Sos nuevo en InmobiliariaPY? ' : '¿Ya tenés cuenta? '}
-            <Link href={isLogin ? '/auth/register' : '/auth/login'}>{isLogin ? 'Creá una cuenta' : 'Ingresá'}</Link>
+            <Link href={switchHref}>{isLogin ? 'Creá una cuenta' : 'Ingresá'}</Link>
           </div>
 
           <div className="auth-legal">
@@ -286,16 +353,16 @@ export function LegacyAuthClient({ mode }: { mode: 'login' | 'register' }) {
   );
 }
 
-function AuthField({ label, hint, rightLabel, type = 'text', value, onChange, placeholder }: {
-  label: string; hint?: string; rightLabel?: React.ReactNode; type?: string; value: string; onChange: (v: string) => void; placeholder?: string;
+function AuthField({ id, label, hint, rightLabel, type = 'text', value, onChange, placeholder, autoComplete, required = true }: {
+  id: string; label: string; hint?: string; rightLabel?: React.ReactNode; type?: string; value: string; onChange: (v: string) => void; placeholder?: string; autoComplete?: string; required?: boolean;
 }) {
   return (
     <div className="auth-field">
-      <label>
+      <label htmlFor={id}>
         <span>{label}{hint && <span className="hint">{hint}</span>}</span>
         {rightLabel}
       </label>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} required />
+      <input id={id} name={id} type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} autoComplete={autoComplete} required={required} />
     </div>
   );
 }
@@ -307,7 +374,7 @@ function AccountTypeCard({ active, onClick, title, desc, icon }: { active: boole
     building: <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 18V4h12v14M8 8h1M11 8h1M8 11h1M11 11h1M8 14h1M11 14h1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>,
   };
   return (
-    <button type="button" className={`auth-type-card ${active ? 'active' : ''}`} onClick={onClick}>
+    <button type="button" className={`auth-type-card ${active ? 'active' : ''}`} onClick={onClick} aria-pressed={active}>
       <span className="auth-type-icon">{icons[icon]}</span>
       <span className="auth-type-text">
         <span className="auth-type-title">{title}</span>

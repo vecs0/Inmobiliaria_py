@@ -14,19 +14,10 @@ export default async function RecientesPage() {
     // Logged-in user: fetch from Supabase
     const supabase = await createClient();
 
-    // Últimas 20 propiedades vistas (action = 'view') con JOIN a properties
+    // Últimas 20 propiedades vistas (action = 'view')
     const { data: rows } = await supabase
       .from('search_history')
-      .select(`
-        property_id,
-        created_at,
-        properties (
-          id, external_id, title, type, operation_type,
-          price, currency, bedrooms, bathrooms, sqm,
-          city, neighborhood, status, images, boosted,
-          featured_until, latitude, longitude
-        )
-      `)
+      .select('property_id, created_at')
       .eq('user_id', ctx.userId)
       .eq('action', 'view')
       .not('property_id', 'is', null)
@@ -42,11 +33,14 @@ export default async function RecientesPage() {
       return true;
     });
 
-    properties = mapPropertiesFromApi(
-      uniqueRows
-        .map((r: Record<string, unknown>) => r.properties)
-        .filter(Boolean) as Record<string, unknown>[]
-    );
+    const ids = uniqueRows.map((r: Record<string, unknown>) => String(r.property_id));
+    if (ids.length > 0) {
+      const { data: listingRows } = await supabase.from('properties_full').select('*').in('id', ids);
+      const byId = new Map((listingRows ?? []).map((p) => [p.id as string, p as Record<string, unknown>]));
+      properties = mapPropertiesFromApi(
+        ids.map((id) => byId.get(id)).filter(Boolean) as Record<string, unknown>[]
+      );
+    }
   }
   // If not logged in, RecientesClient will use localStorage fallback
 

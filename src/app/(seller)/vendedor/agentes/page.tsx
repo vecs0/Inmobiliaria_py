@@ -27,9 +27,9 @@ export default async function AgentesPage() {
 
   if (sellerId) {
     const { data: props } = await supabase
-      .from('properties')
+      .from('listings')
       .select('agent_id')
-      .eq('seller_id', sellerId)
+      .eq('seller_profile_id', sellerId)
       .not('agent_id', 'is', null);
 
     const agentIds = [...new Set((props ?? []).map((p) => p.agent_id).filter(Boolean))] as string[];

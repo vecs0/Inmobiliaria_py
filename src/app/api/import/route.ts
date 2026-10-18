@@ -1,141 +1,59 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { DeduplicationService, DeduplicationParams } from '@/lib/deduplication';
-import { PropertyEntity, Listing } from '@/lib/supabase/types';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { requireEmpresaSeller } from '@/lib/import/auth';
+import { importListings, summaryToResponse, MAX_IMPORT_ITEMS } from '@/lib/import/import-listings';
+import { parseCsvItems, parseXmlItems, detectFormat } from '@/lib/import/parse-feed';
 
-interface ImportItem {
-  // Datos físicos
-  city: string;
-  neighborhood: string;
-  address: string;
-  latitude: number;
-  longitude: number;
-  type: PropertyEntity['type'];
-  bedrooms: number;
-  bathrooms: number;
-  sqm: number;
-  parking: number;
-  year_built?: number;
-  floor?: number;
-  // Datos comerciales
-  title: string;
-  description: string;
-  price: number;
-  currency: 'USD' | 'PYG';
-  operation_type: 'venta' | 'alquiler';
-  image: string;
-  images: string[];
-  amenities: string[];
-  tag?: string;
-  featured: boolean;
-  // Trazabilidad
-  external_id: string;
-  source: 'xml_import' | 'csv_import' | 'api_import';
-  agent_id?: string;
-}
+export const maxDuration = 60;
 
+/**
+ * Acepta:
+ *  - array JSON de items
+ *  - { items: [...] }
+ *  - { data: "<texto crudo>", format?: 'csv' | 'xml' }  (también csvData / xmlData)
+ */
 export async function POST(req: Request) {
   try {
-    const properties = await req.json();
+    const auth = await requireEmpresaSeller();
+    if ('response' in auth) return auth.response;
 
-    if (!Array.isArray(properties)) {
-      return NextResponse.json({ error: 'El cuerpo de la solicitud debe ser un array de propiedades' }, { status: 400 });
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
     }
 
-    const supabase = await createClient();
-    const results = {
-      imported: 0,
-      deduplicated: 0,
-      errors: 0,
-      details: [] as any[]
-    };
-
-    for (const item of properties) {
-      try {
-        // 1. Preparar parámetros de deduplicación
-        const dedupParams: DeduplicationParams = {
-          city: item.city,
-          neighborhood: item.neighborhood,
-          sqm: item.sqm,
-          bedrooms: item.bedrooms,
-          bathrooms: item.bathrooms,
-          latitude: item.latitude,
-          longitude: item.longitude,
-        };
-
-        // 2. Generar Hash de similitud
-        const similarityHash = DeduplicationService.generateSimilarityHash(dedupParams);
-
-        // 3. Buscar entidad existente por Hash o Coordenadas
-        let { data: existingEntity, error: entityError } = await supabase
-          .from('property_entities')
-          .select('id')
-          .or(`similarity_hash.eq.${similarityHash},latitude.eq.${item.latitude}`)
-          .maybeSingle();
-
-        let entityId: string;
-
-        if (existingEntity) {
-          entityId = existingEntity.id;
-          results.deduplicated++;
-        } else {
-          // 4. Crear nueva entidad física
-          const { data: newEntity, error: createEntityError } = await supabase
-            .from('property_entities')
-            .insert({
-              ...dedupParams,
-              address: item.address,
-              type: item.type,
-              year_built: item.year_built,
-              floor: item.floor,
-              similarity_hash: similarityHash
-            })
-            .select('id')
-            .single();
-
-          if (createEntityError) throw createEntityError;
-          entityId = newEntity.id;
+    let items: unknown[] | null = null;
+    if (Array.isArray(body)) items = body;
+    else if (Array.isArray(body?.items)) items = body.items;
+    else {
+      const text: unknown = body?.data ?? body?.csvData ?? body?.xmlData;
+      if (typeof text === 'string' && text.trim()) {
+        if (text.length > 5 * 1024 * 1024) {
+          return NextResponse.json({ error: 'Archivo supera 5MB' }, { status: 413 });
         }
-
-        // 5. Crear el listing comercial vinculado a la entidad
-        const { error: listingError } = await supabase
-          .from('listings')
-          .insert({
-            entity_id: entityId,
-            title: item.title,
-            description: item.description,
-            price: item.price,
-            currency: item.currency,
-            operation_type: item.operation_type,
-            image: item.image,
-            images: item.images,
-            amenities: item.amenities,
-            tag: item.tag,
-            featured: item.featured,
-            source: item.source,
-            external_id: item.external_id,
-            agent_id: item.agent_id,
-            status: 'active'
-          });
-
-        if (listingError) throw listingError;
-
-        results.imported++;
-      } catch (itemError: any) {
-        results.errors++;
-        results.details.push({
-          title: item.title,
-          error: itemError.message
-        });
+        const f = String(body?.format ?? '').toLowerCase();
+        const format = f === 'csv' || f === 'xml' ? f : body?.csvData ? 'csv' : body?.xmlData ? 'xml' : detectFormat(text);
+        try {
+          items = format === 'csv' ? parseCsvItems(text) : await parseXmlItems(text);
+        } catch {
+          return NextResponse.json({ error: 'No se pudo interpretar el archivo' }, { status: 400 });
+        }
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      summary: results
-    });
+    if (!items) {
+      return NextResponse.json({ error: 'Se esperaba un array de propiedades o datos CSV/XML' }, { status: 400 });
+    }
+    if (items.length === 0) return NextResponse.json({ error: 'No hay propiedades para importar' }, { status: 400 });
+    if (items.length > MAX_IMPORT_ITEMS) {
+      return NextResponse.json({ error: `Máximo ${MAX_IMPORT_ITEMS} propiedades por importación` }, { status: 413 });
+    }
 
-  } catch (error: any) {
+    const summary = await importListings(createAdminClient(), auth.sellerProfileId, items);
+    return NextResponse.json(summaryToResponse(summary));
+  } catch (error) {
     console.error('Import Error:', error);
     return NextResponse.json({ error: 'Error interno al procesar la importación' }, { status: 500 });
   }

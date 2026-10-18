@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -85,13 +85,20 @@ export function SuscripcionClient({
   const [canceling, setCanceling] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelDone, setCancelDone] = useState(seller.subscription_status === 'canceled');
+  const [cancelPending, setCancelPending] = useState(false);
+  const [checkoutStatus, setCheckoutStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    const s = new URLSearchParams(window.location.search).get('status');
+    if (s === 'success' || s === 'cancel') setCheckoutStatus(s);
+  }, []);
 
   const progress = Math.min(100, Math.round((seller.properties_count / seller.max_properties) * 100));
   const usedColor = progress >= 90 ? '#ff6b6b' : progress >= 70 ? 'var(--gold)' : '#4caf7d';
 
-  const currentStatus = cancelDone ? 'canceled' : (seller.subscription_status ?? 'inactive');
+  const currentStatus = seller.subscription_status ?? 'inactive';
   const currentPlanName = seller.subscription_plan ?? 'trial';
-  const canCancel = !!seller.stripe_subscription_id && !cancelDone && currentStatus !== 'inactive';
+  const canCancel = !!seller.stripe_subscription_id && !cancelDone && !cancelPending && currentStatus !== 'inactive';
 
   // Planes visibles: excluir trial, ordenar por precio
   const visiblePlans = plans.filter((p) => p.plan_type !== 'trial');
@@ -118,7 +125,7 @@ export function SuscripcionClient({
       const res = await fetch('/api/stripe/cancel-subscription', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
-        setCancelDone(true);
+        setCancelPending(true);
         setShowCancelModal(false);
       } else {
         alert(data.error ?? 'Error al cancelar');
@@ -130,6 +137,15 @@ export function SuscripcionClient({
 
   return (
     <div>
+      {checkoutStatus && (
+        <div className="dash-panel" style={{ marginBottom: 24 }}>
+          <p style={{ margin: 0, fontSize: 14, color: checkoutStatus === 'success' ? '#4caf7d' : 'var(--gray)' }}>
+            {checkoutStatus === 'success'
+              ? 'Pago recibido. Tu suscripción se activará en unos instantes.'
+              : 'El pago fue cancelado. No se realizó ningún cargo.'}
+          </p>
+        </div>
+      )}
       {/* Topbar */}
       <div className="dash-topbar">
         <div>
@@ -153,10 +169,10 @@ export function SuscripcionClient({
             </div>
           </div>
 
-          {cancelDone && (
+          {(cancelDone || cancelPending) && (
             <div style={{ background: 'rgba(255,107,107,0.08)', border: '1px solid rgba(255,107,107,0.25)', borderRadius: 10, padding: '12px 16px', maxWidth: 320 }}>
               <p style={{ color: '#ff6b6b', fontSize: 13, lineHeight: 1.5, margin: 0 }}>
-                Tu suscripción fue cancelada. Seguirá activa hasta el fin del período de facturación.
+                Se cancela al final del período. Seguirá activa hasta el fin del período de facturación.
               </p>
             </div>
           )}

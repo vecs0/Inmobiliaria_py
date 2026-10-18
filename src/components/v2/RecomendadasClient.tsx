@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { PropertyCard } from '@/components/v2/PropertyCard';
 import type { V2Property } from '@/lib/property-adapter';
 
@@ -36,7 +37,7 @@ export function RecomendadasClient({
           <p style={{ color: 'var(--gray)', fontSize: 14, lineHeight: 1.6, marginBottom: 24 }}>
             Visitá algunas propiedades y volvé aquí para ver sugerencias personalizadas.
           </p>
-          <a
+          <Link
             href="/propiedades"
             style={{
               display: 'inline-block',
@@ -51,7 +52,7 @@ export function RecomendadasClient({
             }}
           >
             VER CATÁLOGO →
-          </a>
+          </Link>
         </div>
       ) : (
         <div
@@ -62,7 +63,7 @@ export function RecomendadasClient({
           }}
         >
           {properties.map((p) => (
-            <PropertyCard key={p.id} property={p} />
+            <PropertyCard key={p.id} p={p} />
           ))}
         </div>
       )}

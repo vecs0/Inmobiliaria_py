@@ -2,9 +2,22 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
+
+const SellerProfileSchema = z.object({
+  accountType: z.enum(['particular', 'empresa']),
+  fullName: z.string().trim().min(2).max(160),
+  phone: z.string().trim().max(40).optional().default(''),
+  cedula: z.string().trim().max(30).optional(),
+  companyName: z.string().trim().max(160).optional(),
+  ruc: z.string().trim().max(30).optional(),
+  hasWebsite: z.boolean().optional().default(false),
+  websiteUrl: z.string().trim().max(300).optional(),
+});
 
 export interface SellerProfileData {
-  userId: string;
+  /** @deprecated Ignorado: el user_id se toma de la sesión (supabase.auth.getUser()). */
+  userId?: string;
   accountType: 'particular' | 'empresa';
   fullName: string;
   phone: string;
@@ -15,18 +28,32 @@ export interface SellerProfileData {
   websiteUrl?: string;
 }
 
-export async function createSellerProfile(data: SellerProfileData) {
+export async function createSellerProfile(input: SellerProfileData): Promise<{ success: boolean; error?: string }> {
+  const parsed = SellerProfileSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: 'Datos de perfil inválidos.' };
+  const data = parsed.data;
+
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: 'No autenticado.' };
 
   try {
+    // Idempotente: si ya existe un perfil de vendedor, no crear otro
+    const { data: existing } = await supabase
+      .from('seller_profiles')
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (existing) return { success: true };
+
     const { error: profileError } = await supabase.from('seller_profiles').insert({
-      user_id: data.userId,
+      user_id: user.id,
       seller_type: data.accountType,
       full_name: data.fullName,
-      phone: data.phone,
+      phone: data.phone || null,
       cedula: data.cedula || null,
-      company_name: data.companyName || null,
-      ruc: data.ruc || null,
+      company_name: data.accountType === 'empresa' ? data.companyName || data.fullName : null,
+      ruc: data.accountType === 'empresa' ? data.ruc || null : null,
       ruc_verified: false,
       has_website: data.hasWebsite,
       website_url: data.websiteUrl || null,
@@ -42,7 +69,7 @@ export async function createSellerProfile(data: SellerProfileData) {
 
     revalidatePath('/vendedor');
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Unexpected error creating seller profile:', error);
     return { success: false, error: 'Ocurrió un error inesperado al crear el perfil.' };
   }
@@ -91,7 +118,8 @@ export async function updateSellerProfile(data: {
 
     revalidatePath('/vendedor/perfil');
     return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message ?? 'Error al guardar.' };
+  } catch (err: unknown) {
+    const msg = err && typeof err === 'object' && 'message' in err ? String((err as { message: unknown }).message) : 'Error al guardar.';
+    return { success: false, error: msg };
   }
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { DashboardPlan } from '@/lib/seller/fetch-dashboard';
@@ -44,6 +45,8 @@ export function SellerShell({
   isEmpresa?: boolean;
 }) {
   const pathname = usePathname();
+  const [open, setOpen] = useState(false);
+  useEffect(() => { setOpen(false); }, [pathname]);
   const progress = Math.min(100, (plan.activeCount / plan.maxCount) * 100);
 
   function isActive(href: string) {
@@ -58,7 +61,11 @@ export function SellerShell({
 
   return (
     <div className="dash-shell" style={{ paddingTop: 0, minHeight: '100vh' }}>
-      <aside className="dash-sidebar">
+      <button type="button" className="dash-mobile-toggle" aria-label="Menú" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        {open ? '×' : '≡'}
+      </button>
+      <div className={`dash-backdrop${open ? ' open' : ''}`} onClick={() => setOpen(false)} />
+      <aside className={`dash-sidebar${open ? ' open' : ''}`}>
         <Link href="/" className="dash-logo" style={{ textDecoration: 'none' }}>
           <span>Inmobiliaria</span>
           <span style={{ color: 'var(--gold)' }}>PY</span>

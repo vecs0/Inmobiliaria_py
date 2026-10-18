@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { PropertyCard } from '@/components/v2/PropertyCard';
 import { mapPropertiesFromApi } from '@/lib/property-adapter';
-import { PROPERTIES } from '@/lib/v2-data';
 
 export function BuyerDashboardClient({
   userName,
@@ -12,8 +11,7 @@ export function BuyerDashboardClient({
   userName: string;
   featured?: Record<string, unknown>[];
 }) {
-  const items =
-    featured.length > 0 ? mapPropertiesFromApi(featured) : PROPERTIES.slice(0, 5);
+  const items = mapPropertiesFromApi(featured);
 
   return (
     <div className="page-landing" style={{ paddingTop: 100, paddingBottom: 80 }}>
@@ -39,11 +37,20 @@ export function BuyerDashboardClient({
             Recomendadas <span className="italic">para vos.</span>
           </h2>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 24 }}>
-          {items.map((p) => (
-            <PropertyCard key={p.id} p={p} />
-          ))}
-        </div>
+        {items.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '48px 24px', border: '1px dashed var(--gray-line)', borderRadius: 12 }}>
+            <p style={{ color: 'var(--gray)', marginBottom: 20 }}>Todavía no hay propiedades destacadas para mostrarte.</p>
+            <Link href="/propiedades" className="btn btn-gold">
+              Explorar catálogo <span className="btn-arrow">→</span>
+            </Link>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 24 }}>
+            {items.map((p) => (
+              <PropertyCard key={p.id} p={p} />
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );

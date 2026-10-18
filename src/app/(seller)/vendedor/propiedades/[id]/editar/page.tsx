@@ -8,8 +8,9 @@ import { NuevaPropertyClient } from '@/components/v2/NuevaPropertyClient';
 export default async function EditarPropiedadPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
   const ctx = await getUserContext();
   if (!ctx) redirect('/auth/login');
 
@@ -28,7 +29,7 @@ export default async function EditarPropiedadPage({
         bedrooms, bathrooms, sqm, parking
       )
     `)
-    .eq('id', params.id)
+    .eq('id', id)
     .maybeSingle();
 
   if (error || !listing) notFound();

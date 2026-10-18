@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Home, Building2, LayoutDashboard } from 'lucide-react';
+import { useTranslation } from '@/lib/i18n';
+import { LanguageCurrencySelector } from '@/components/LanguageCurrencySelector';
 import type { AppRole } from '@/lib/auth/role-utils';
 
 interface UserData {
@@ -22,6 +24,7 @@ export default function NavV2() {
   const [userMenu, setUserMenu] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const supabase = createClient();
+  const { t } = useTranslation();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 50);
@@ -100,20 +103,20 @@ export default function NavV2() {
   const navClass = `nav${scrolled || !isLanding ? ' solid' : ''}`;
 
   const panelHref = isSeller ? '/vendedor' : '/comprador';
-  const panelLabel = isSeller ? 'Mi panel' : 'Mi espacio';
+  const panelLabel = isSeller ? t('nav.myPanel') : t('nav.mySpace');
 
   return (
     <>
       <nav className={navClass}>
         <div className="nav-left">
           {showBack && (
-            <button type="button" className="nav-back" onClick={handleBack} data-cursor="hover" aria-label="Volver">
+            <button type="button" className="nav-back" onClick={handleBack} data-cursor="hover" aria-label={t('nav.back')}>
               <span className="nav-back-icon">
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                   <path d="M9 2L4 7l5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </span>
-              <span className="nav-back-label">Volver</span>
+              <span className="nav-back-label">{t('nav.back')}</span>
             </button>
           )}
           <Link className="nav-logo" href="/" data-cursor="hover">
@@ -127,28 +130,28 @@ export default function NavV2() {
           <Link href="/" className={isLanding ? 'active font-bold text-[#B8922A]' : 'text-white/80 hover:text-white'} data-cursor="hover">
             <span className="flex items-center gap-1.5">
               <Home size={14} className={isLanding ? 'text-[#B8922A]' : 'text-white/60'} />
-              <span>Inicio</span>
+              <span>{t('nav.home')}</span>
             </span>
           </Link>
           <Link href="/propiedades" className={isListing || isDetail ? 'active font-bold text-[#B8922A]' : 'text-white/80 hover:text-white'} data-cursor="hover">
             <span className="flex items-center gap-1.5">
               <Building2 size={14} className={isListing || isDetail ? 'text-[#B8922A]' : 'text-white/60'} />
-              <span>Propiedades</span>
+              <span>{t('nav.properties')}</span>
             </span>
           </Link>
           {isDetail && (
-            <span className="active font-bold text-[#B8922A]">Propiedad</span>
+            <span className="active font-bold text-[#B8922A]">{t('nav.property')}</span>
           )}
           <Link href="/vendedor" className={isVendedor ? 'active font-bold text-[#B8922A]' : 'text-white/80 hover:text-white'} data-cursor="hover">
             <span className="flex items-center gap-1.5">
               <LayoutDashboard size={14} className={isVendedor ? 'text-[#B8922A]' : 'text-white/60'} />
-              <span>Vendedor</span>
+              <span>{t('nav.seller')}</span>
             </span>
           </Link>
         </div>
 
         <div className="nav-right">
-          <span className="lang">ES · PY</span>
+          <div className="lang-selector"><LanguageCurrencySelector /></div>
 
           {!authReady ? null : user ? (
             <div className="nav-user">
@@ -167,26 +170,26 @@ export default function NavV2() {
                   <Link href={panelHref} onClick={() => setUserMenu(false)}>{panelLabel}</Link>
                   {isSeller ? (
                     <>
-                      <Link href="/vendedor/propiedades" onClick={() => setUserMenu(false)}>Mis propiedades</Link>
-                      <Link href="/vendedor/leads" onClick={() => setUserMenu(false)}>Consultas</Link>
+                      <Link href="/vendedor/propiedades" onClick={() => setUserMenu(false)}>{t('nav.myProperties')}</Link>
+                      <Link href="/vendedor/leads" onClick={() => setUserMenu(false)}>{t('nav.inquiries')}</Link>
                     </>
                   ) : (
                     <>
-                      <Link href="/comprador#favoritos" onClick={() => setUserMenu(false)}>Favoritos</Link>
-                      <Link href="/comprador#alertas" onClick={() => setUserMenu(false)}>Alertas</Link>
+                      <Link href="/comprador#favoritos" onClick={() => setUserMenu(false)}>{t('nav.favorites')}</Link>
+                      <Link href="/comprador#alertas" onClick={() => setUserMenu(false)}>{t('nav.alerts')}</Link>
                     </>
                   )}
                   <div className="nav-user-sep" />
                   <button type="button" onClick={handleLogout} style={{ width: '100%', textAlign: 'left', padding: '8px 16px', cursor: 'pointer', background: 'none', border: 'none', color: 'inherit', font: 'inherit' }}>
-                    Cerrar sesión
+                    {t('nav.logout')}
                   </button>
                 </div>
               )}
             </div>
           ) : (
             <>
-              <Link className="ingresar" href="/auth/login" data-cursor="hover">Ingresar</Link>
-              <Link className="nav-cta" href="/auth/register" data-cursor="hover">Registrarse</Link>
+              <Link className="ingresar" href="/auth/login" data-cursor="hover">{t('nav.signIn')}</Link>
+              <Link className="nav-cta" href="/auth/register" data-cursor="hover">{t('nav.signUp')}</Link>
             </>
           )}
 
@@ -194,9 +197,8 @@ export default function NavV2() {
             type="button"
             className="nav-mobile-toggle"
             onClick={() => setMobileOpen(!mobileOpen)}
-            aria-label="Menu"
+            aria-label={t('nav.menu')}
             style={{
-              display: 'none',
               background: 'none',
               border: 'none',
               color: 'var(--white)',
@@ -224,11 +226,11 @@ export default function NavV2() {
           gap: '16px',
         }}>
           {[
-            { href: '/', label: 'Inicio' },
-            { href: '/propiedades', label: 'Propiedades' },
-            { href: '/vendedor', label: 'Portal vendedor' },
+            { href: '/', label: t('nav.home') },
+            { href: '/propiedades', label: t('nav.properties') },
+            { href: '/vendedor', label: t('nav.sellerPortal') },
             { href: panelHref, label: panelLabel },
-            { href: '/auth/login', label: 'Iniciar sesión' },
+            { href: '/auth/login', label: t('nav.login') },
           ].map((item) => (
             <Link
               key={item.href}

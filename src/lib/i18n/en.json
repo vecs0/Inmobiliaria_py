@@ -3,7 +3,22 @@
     "properties": "Properties",
     "sell": "Sell",
     "login": "Sign in",
-    "register": "Create account"
+    "register": "Create account",
+    "home": "Home",
+    "seller": "Seller",
+    "back": "Back",
+    "myPanel": "My dashboard",
+    "mySpace": "My space",
+    "myProperties": "My properties",
+    "inquiries": "Inquiries",
+    "favorites": "Favorites",
+    "alerts": "Alerts",
+    "logout": "Sign out",
+    "signIn": "Sign in",
+    "signUp": "Sign up",
+    "property": "Property",
+    "sellerPortal": "Seller portal",
+    "menu": "Menu"
   },
   "search": {
     "placeholder": "City, area or type...",

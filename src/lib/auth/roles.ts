@@ -1,8 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
 import { resolveAppRole, type AppRole } from './role-utils';
 
-export type { AppRole } from './role-utils';
-export { resolveAppRole, homePathForRole } from './role-utils';
+export type { AppRole, RoleRequirement } from './role-utils';
+export { resolveAppRole, homePathForRole, hasRole, isSellerRole } from './role-utils';
 
 export type UserContext = {
   userId: string;

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Check, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -24,22 +24,24 @@ interface SubscriptionPlansClientProps {
 export function SubscriptionPlansClient({ plans, currentPlan, status }: SubscriptionPlansClientProps) {
   const [loadingId, setLoadingId] = useState<number | null>(null);
 
+  useEffect(() => {
+    const s = new URLSearchParams(window.location.search).get('status') ?? status;
+    if (s === 'success') toast.success('Pago recibido. Tu suscripción se activará en unos instantes.');
+    else if (s === 'cancel') toast.info('El pago fue cancelado.');
+  }, [status]);
+
   const handleSubscribe = async (planId: number) => {
     setLoadingId(planId);
     try {
       const response = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          planId,
-          successUrl: window.location.origin + '/vendedor/suscripcion?success=true',
-          cancelUrl: window.location.origin + '/vendedor/suscripcion?canceled=true',
-        }),
+        body: JSON.stringify({ planId }),
       });
 
       const data = await response.json();
       if (data.url) {
-        window.location.href = data.url;
+        window.location.assign(data.url);
       } else {
         toast.error(data.error || 'Error al iniciar el pago');
       }

@@ -1,10 +1,10 @@
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { AdminAnalyticsClient } from '@/components/admin/AdminAnalyticsClient';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminAnalyticsPage() {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   // Get analytics data
   const { data: listingsByMonth } = await supabase

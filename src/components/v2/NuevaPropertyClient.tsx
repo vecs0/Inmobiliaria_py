@@ -84,17 +84,19 @@ function Label({ children }: { children: React.ReactNode }) {
 }
 
 function Counter({
-  value, onChange, min = 0, max = 20,
-}: { value: number; onChange: (v: number) => void; min?: number; max?: number }) {
+  value, onChange, min = 0, max = 20, label = '',
+}: { value: number; onChange: (v: number) => void; min?: number; max?: number; label?: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
       <button type="button"
         onClick={() => onChange(Math.max(min, value - 1))}
+        aria-label={`Restar ${label}`}
         style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid var(--gray-line)', background: 'var(--bg-dark)', color: 'var(--fg)', cursor: 'pointer', fontSize: 18, lineHeight: 1, display:'flex',alignItems:'center',justifyContent:'center' }}
       >−</button>
-      <span style={{ minWidth: 24, textAlign: 'center', fontFamily: 'var(--font-mono)' }}>{value}</span>
+      <span aria-live="polite" style={{ minWidth: 24, textAlign: 'center', fontFamily: 'var(--font-mono)' }}>{value}</span>
       <button type="button"
         onClick={() => onChange(Math.min(max, value + 1))}
+        aria-label={`Sumar ${label}`}
         style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid var(--gray-line)', background: 'var(--bg-dark)', color: 'var(--fg)', cursor: 'pointer', fontSize: 18, lineHeight: 1, display:'flex',alignItems:'center',justifyContent:'center' }}
       >+</button>
     </div>
@@ -113,6 +115,7 @@ function Step1({ f, set }: { f: FormState; set: (p: Partial<FormState>) => void 
           {TIPOS.map((t) => (
             <button key={t} type="button"
               onClick={() => set({ type: t })}
+              aria-pressed={f.type === t}
               style={{
                 padding: '14px 8px', borderRadius: 10, border: `1px solid ${f.type === t ? 'var(--gold)' : 'var(--gray-line)'}`,
                 background: f.type === t ? 'rgba(200,168,100,0.08)' : 'var(--bg-dark)',
@@ -132,6 +135,7 @@ function Step1({ f, set }: { f: FormState; set: (p: Partial<FormState>) => void 
           {(['venta', 'alquiler'] as const).map((op) => (
             <button key={op} type="button"
               onClick={() => set({ operation_type: op })}
+              aria-pressed={f.operation_type === op}
               style={{
                 flex: 1, padding: '12px 8px', borderRadius: 10,
                 border: `1px solid ${f.operation_type === op ? 'var(--gold)' : 'var(--gray-line)'}`,
@@ -261,12 +265,14 @@ function Step3({ f, set }: { f: FormState; set: (p: Partial<FormState>) => void 
             value={f.price}
             onChange={(e) => set({ price: e.target.value })}
             placeholder="0"
+            aria-label="Precio"
             style={{ ...fieldStyle, flex: 1 }}
           />
           <div style={{ display: 'flex', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--gray-line)' }}>
             {(['USD', 'PYG'] as const).map((cur) => (
               <button key={cur} type="button"
                 onClick={() => set({ currency: cur })}
+                aria-pressed={f.currency === cur}
                 style={{
                   padding: '0 16px', background: f.currency === cur ? 'var(--gold)' : 'var(--bg-dark)',
                   color: f.currency === cur ? '#000' : 'var(--gray)',
@@ -307,13 +313,13 @@ function Step3({ f, set }: { f: FormState; set: (p: Partial<FormState>) => void 
         <div>
           <Label>Dormitorios</Label>
           <div style={{ marginTop: 12 }}>
-            <Counter value={f.bedrooms} onChange={(v) => set({ bedrooms: v })} min={0} max={20} />
+            <Counter label="dormitorio" value={f.bedrooms} onChange={(v) => set({ bedrooms: v })} min={0} max={20} />
           </div>
         </div>
         <div>
           <Label>Baños</Label>
           <div style={{ marginTop: 12 }}>
-            <Counter value={f.bathrooms} onChange={(v) => set({ bathrooms: v })} min={1} max={10} />
+            <Counter label="baño" value={f.bathrooms} onChange={(v) => set({ bathrooms: v })} min={1} max={10} />
           </div>
         </div>
       </div>
@@ -322,6 +328,9 @@ function Step3({ f, set }: { f: FormState; set: (p: Partial<FormState>) => void 
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
         <button type="button"
           onClick={() => set({ garage: !f.garage })}
+          role="switch"
+          aria-checked={f.garage}
+          aria-labelledby="garage-label"
           style={{
             width: 48, height: 26, borderRadius: 13,
             background: f.garage ? 'var(--gold)' : 'var(--gray-line)',
@@ -334,7 +343,7 @@ function Step3({ f, set }: { f: FormState; set: (p: Partial<FormState>) => void 
             transition: 'left 0.2s',
           }} />
         </button>
-        <span style={{ fontSize: 14 }}>Garaje / Cochera</span>
+        <span id="garage-label" style={{ fontSize: 14 }}>Garaje / Cochera</span>
       </div>
 
       {/* Amenities */}
@@ -346,6 +355,7 @@ function Step3({ f, set }: { f: FormState; set: (p: Partial<FormState>) => void 
             return (
               <button key={a} type="button"
                 onClick={() => toggleAmenity(a)}
+                aria-pressed={active}
                 style={{
                   padding: '7px 14px', borderRadius: 20, fontSize: 13,
                   border: `1px solid ${active ? 'var(--gold)' : 'var(--gray-line)'}`,
@@ -402,6 +412,10 @@ function Step4({ f, set }: { f: FormState; set: (p: Partial<FormState>) => void 
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}
         onClick={() => inputRef.current?.click()}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); inputRef.current?.click(); } }}
+        role="button"
+        tabIndex={0}
+        aria-label="Subir fotos de la propiedad"
         style={{
           border: '2px dashed var(--gray-line)', borderRadius: 12, padding: '40px 24px',
           textAlign: 'center', cursor: uploading ? 'not-allowed' : 'pointer',
@@ -507,7 +521,7 @@ function Step5({ f }: { f: FormState }) {
 
       <div style={{ background: 'rgba(200,168,100,0.06)', border: '1px solid rgba(200,168,100,0.2)', borderRadius: 10, padding: '14px 18px' }}>
         <p style={{ color: 'var(--gold)', fontSize: 13 }}>
-          ✓ Tu propiedad quedará en estado <strong>activo</strong> una vez publicada. Podés pausarla o editarla en cualquier momento desde "Mis propiedades".
+          ✓ Tu propiedad quedará en estado <strong>activo</strong> una vez publicada. Podés pausarla o editarla en cualquier momento desde &ldquo;Mis propiedades&rdquo;.
         </p>
       </div>
     </div>

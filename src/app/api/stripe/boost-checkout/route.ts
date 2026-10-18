@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
-import { stripe } from '@/lib/stripe/config';
-import { createClient } from '@/lib/supabase/server';
+import { getStripe } from '@/lib/stripe/config';
+import { appUrl } from '@/lib/stripe/urls';
 import { getPlanByKey } from '@/lib/stripe/boost-plans';
+import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://inmobiliariapy.com';
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {
@@ -11,7 +13,9 @@ export async function POST(req: Request) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
-    const { propertyId, planKey } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const propertyId = typeof body?.propertyId === 'string' ? body.propertyId : null;
+    const planKey = typeof body?.planKey === 'string' ? body.planKey : null;
     if (!propertyId || !planKey) {
       return NextResponse.json({ error: 'Faltan parámetros' }, { status: 400 });
     }
@@ -19,65 +23,65 @@ export async function POST(req: Request) {
     const plan = getPlanByKey(planKey);
     if (!plan) return NextResponse.json({ error: 'Plan inválido' }, { status: 400 });
 
-    // Verificar que la propiedad pertenece al vendedor
-    const { data: prop, error: propErr } = await supabase
+    const db = createAdminClient();
+
+    const { data: seller, error: sellerErr } = await db
+      .from('seller_profiles')
+      .select('id, stripe_customer_id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (sellerErr) throw sellerErr;
+    if (!seller) return NextResponse.json({ error: 'Perfil de vendedor no encontrado' }, { status: 403 });
+
+    // Verificar que el listing pertenece al vendedor
+    const { data: listing, error: listingErr } = await db
       .from('listings')
       .select('id, title')
       .eq('id', propertyId)
-      .eq('seller_id', user.id)
-      .single();
+      .eq('seller_profile_id', seller.id)
+      .maybeSingle();
+    if (listingErr) throw listingErr;
+    if (!listing) return NextResponse.json({ error: 'Propiedad no encontrada' }, { status: 404 });
 
-    if (propErr || !prop) {
-      return NextResponse.json({ error: 'Propiedad no encontrada' }, { status: 404 });
-    }
-
-    // Obtener/crear Stripe customer
-    const { data: sellerProfile } = await supabase
-      .from('seller_profiles')
-      .select('stripe_customer_id')
-      .eq('user_id', user.id)
-      .single();
-
-    let customerId = sellerProfile?.stripe_customer_id;
+    const stripe = getStripe();
+    let customerId: string | null = seller.stripe_customer_id;
     if (!customerId) {
       const customer = await stripe.customers.create({
         email: user.email,
-        metadata: { supabase_user_id: user.id },
+        metadata: { supabase_user_id: user.id, seller_profile_id: seller.id },
       });
       customerId = customer.id;
-      await supabase.from('seller_profiles')
+      const { error: upErr } = await db
+        .from('seller_profiles')
         .update({ stripe_customer_id: customerId })
-        .eq('user_id', user.id);
+        .eq('id', seller.id);
+      if (upErr) throw upErr;
     }
 
-    // Crear registro de boost en estado pending
-    const { data: boost, error: boostErr } = await supabase
+    // Boost en estado pending (solo service role puede escribir property_boosts)
+    const { data: boost, error: boostErr } = await db
       .from('property_boosts')
-      .insert([{
-        property_id: propertyId,
+      .insert({
+        property_id: listing.id,
         seller_id: user.id,
-        plan_key: planKey,
+        plan_key: plan.key,
         price_usd: plan.priceUsd,
         status: 'pending',
-      }])
-      .select()
+      })
+      .select('id')
       .single();
+    if (boostErr || !boost) throw boostErr ?? new Error('Error creando boost');
 
-    if (boostErr || !boost) throw new Error('Error creando boost');
-
-    // Crear Stripe checkout session (pago único)
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'payment',
-      payment_method_types: ['card'],
       line_items: [{
         price_data: {
           currency: 'usd',
           unit_amount: Math.round(plan.priceUsd * 100),
           product_data: {
             name: `Destacado PRO — ${plan.label}`,
-            description: `Propiedad: ${prop.title}`,
-            images: [],
+            description: `Propiedad: ${listing.title}`,
           },
         },
         quantity: 1,
@@ -85,23 +89,26 @@ export async function POST(req: Request) {
       metadata: {
         type: 'boost',
         boost_id: boost.id,
-        property_id: propertyId,
+        property_id: listing.id,
         seller_id: user.id,
-        plan_key: planKey,
+        seller_profile_id: seller.id,
+        plan_key: plan.key,
         plan_days: String(plan.days),
       },
-      success_url: `${SITE_URL}/vendedor/destacados?success=1&boost=${boost.id}`,
-      cancel_url:  `${SITE_URL}/vendedor/destacados?cancelled=1`,
+      // success/cancelled se mantienen por compatibilidad con DestacadosV2Client
+      success_url: appUrl(`/vendedor/destacados?status=success&success=1&boost=${boost.id}`),
+      cancel_url: appUrl('/vendedor/destacados?status=cancel&cancelled=1'),
     });
 
-    // Guardar session ID en el boost
-    await supabase.from('property_boosts')
+    const { error: sessErr } = await db
+      .from('property_boosts')
       .update({ stripe_session_id: session.id })
       .eq('id', boost.id);
+    if (sessErr) console.error('[boost-checkout] no se guardó stripe_session_id:', sessErr.message);
 
     return NextResponse.json({ url: session.url });
-  } catch (err: any) {
+  } catch (err) {
     console.error('Boost checkout error:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: 'No se pudo iniciar el pago' }, { status: 500 });
   }
 }

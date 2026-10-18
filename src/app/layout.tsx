@@ -1,11 +1,14 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import './v2-styles.css';
+import { I18nProvider } from '@/lib/i18n';
 
 export const metadata: Metadata = {
+  manifest: '/manifest.json',
+  icons: { icon: '/icon.svg' },
   title: 'InmobiliariaPY | Propiedades premium en Paraguay',
   description:
-    'Encuentra tu propiedad ideal en Paraguay. Más de 500 propiedades curadas en las mejores zonas del país.',
+    'Encuentra tu propiedad ideal en Paraguay. Propiedades curadas en las mejores zonas del país.',
   openGraph: {
     title: 'InmobiliariaPY',
     description: 'Mercado inmobiliario premium de Paraguay',
@@ -25,7 +28,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
         />
       </head>
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <I18nProvider>{children}</I18nProvider>
+      </body>
     </html>
   );
 }

@@ -30,7 +30,7 @@ export default async function RecomendadasPage() {
   if (hasHistory) {
     // 2. Buscar propiedad semilla (la más reciente vista)
     const { data: seedProp } = await supabase
-      .from('properties')
+      .from('properties_full')
       .select('id, type, price, city, bedrooms')
       .eq('id', viewedIds[0])
       .maybeSingle();
@@ -49,7 +49,7 @@ export default async function RecomendadasPage() {
 
         if (similarIds.length > 0) {
           const { data: rows } = await supabase
-            .from('properties')
+            .from('properties_full')
             .select('*')
             .in('id', similarIds)
             .eq('status', 'active')
@@ -64,12 +64,11 @@ export default async function RecomendadasPage() {
   // 4. Fallback: propiedades destacadas recientes si no hay recomendaciones por IA
   if (properties.length < 6) {
     const { data: featured } = await supabase
-      .from('properties')
+      .from('properties_full')
       .select('*')
       .eq('status', 'active')
-      .not('featured_until', 'is', null)
-      .gt('featured_until', new Date().toISOString())
-      .order('featured_until', { ascending: false })
+      .eq('featured', true)
+      .order('created_at', { ascending: false })
       .limit(12 - properties.length);
 
     const featuredMapped = mapPropertiesFromApi(featured ?? []);
@@ -80,7 +79,7 @@ export default async function RecomendadasPage() {
   // 5. Si aún no hay suficientes, traer las más recientes
   if (properties.length < 6) {
     const { data: recents } = await supabase
-      .from('properties')
+      .from('properties_full')
       .select('*')
       .eq('status', 'active')
       .order('created_at', { ascending: false })

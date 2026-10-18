@@ -15,7 +15,14 @@ function resolveActive(pathname: string) {
   return ITEMS[0];
 }
 
+export const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
+
 export function DemoPageSwitcher() {
+  if (!DEMO_MODE) return null;
+  return <DemoPageSwitcherInner />;
+}
+
+function DemoPageSwitcherInner() {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);

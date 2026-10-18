@@ -1,6 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
-import { getOverallStats, getPropertyAnalytics, getViewsTrend30d } from '@/lib/supabase/analytics-actions';
+import { getOverallStats, getPropertyAnalytics, getViewsTrend30d, getViewsLeadsSeries } from '@/lib/supabase/analytics-actions';
 import { getPropertyPath } from '@/lib/property-adapter';
 import { ChartViewsLeads, Sparkline } from '@/components/v2/dashboard-helpers';
 
@@ -41,10 +41,11 @@ function AnalyticsTrendChart({ data }: { data: { date: string; views: number }[]
 }
 
 export default async function AnalyticsPage() {
-  const [stats, properties, trend] = await Promise.all([
+  const [stats, properties, trend, series] = await Promise.all([
     getOverallStats(),
     getPropertyAnalytics(),
     getViewsTrend30d(),
+    getViewsLeadsSeries(30).catch(() => []),
   ]);
 
   const half = Math.floor(trend.length / 2);
@@ -122,7 +123,7 @@ export default async function AnalyticsPage() {
         ) : trend.length > 1 ? (
           <AnalyticsTrendChart data={trend} />
         ) : (
-          <ChartViewsLeads />
+          <ChartViewsLeads series={series} />
         )}
       </div>
 

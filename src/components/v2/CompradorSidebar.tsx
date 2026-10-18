@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -20,6 +21,8 @@ const COMPRADOR_NAV: NavItem[] = [
 
 export function CompradorSidebar({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const [open, setOpen] = useState(false);
+  useEffect(() => { setOpen(false); }, [pathname]);
 
   function isActive(href: string) {
     if (href === '/comprador') return pathname === '/comprador';
@@ -28,7 +31,11 @@ export function CompradorSidebar({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="dash-shell" style={{ paddingTop: 0, minHeight: '100vh' }}>
-      <aside className="dash-sidebar">
+      <button type="button" className="dash-mobile-toggle" aria-label="Menú" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        {open ? '×' : '≡'}
+      </button>
+      <div className={`dash-backdrop${open ? ' open' : ''}`} onClick={() => setOpen(false)} />
+      <aside className={`dash-sidebar${open ? ' open' : ''}`}>
         <Link href="/" className="dash-logo" style={{ textDecoration: 'none' }}>
           <span>Inmobiliaria</span>
           <span style={{ color: 'var(--gold)' }}>PY</span>

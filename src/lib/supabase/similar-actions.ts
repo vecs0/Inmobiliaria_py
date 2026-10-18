@@ -46,7 +46,7 @@ export async function getSimilarProperties(
     const priceMax = property.price * 1.4;
 
     const { data: fallbackData } = await supabase
-      .from('properties')
+      .from('properties_full')
       .select('id, title, location, price, type, bedrooms, bathrooms, sqm, images, featured')
       .eq('status', 'active')
       .eq('type', property.type)
@@ -61,7 +61,7 @@ export async function getSimilarProperties(
 
     // Fallback más amplio: solo precio ±60%
     const { data: broadData } = await supabase
-      .from('properties')
+      .from('properties_full')
       .select('id, title, location, price, type, bedrooms, bathrooms, sqm, images, featured')
       .eq('status', 'active')
       .neq('id', propertyId)

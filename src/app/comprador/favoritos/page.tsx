@@ -13,26 +13,21 @@ export default async function FavoritosPage() {
 
   const supabase = await createClient();
 
-  // JOIN favorites → properties para traer los datos completos
-  const { data: rows } = await supabase
+  const { data: favRows } = await supabase
     .from('favorites')
-    .select(`
-      property_id,
-      properties (
-        id, external_id, title, type, operation_type,
-        price, currency, bedrooms, bathrooms, sqm,
-        city, neighborhood, status, images, boosted,
-        featured_until, latitude, longitude
-      )
-    `)
+    .select('property_id')
     .eq('user_id', ctx.userId)
     .order('created_at', { ascending: false });
 
-  const properties = mapPropertiesFromApi(
-    (rows ?? [])
-      .map((r: Record<string, unknown>) => r.properties)
-      .filter(Boolean) as Record<string, unknown>[]
-  );
+  const favIds = (favRows ?? []).map((r) => r.property_id).filter(Boolean) as string[];
+  let listingRows: Record<string, unknown>[] = [];
+  if (favIds.length > 0) {
+    const { data } = await supabase.from('properties_full').select('*').in('id', favIds);
+    const byId = new Map((data ?? []).map((p) => [p.id as string, p as Record<string, unknown>]));
+    listingRows = favIds.map((id) => byId.get(id)).filter(Boolean) as Record<string, unknown>[];
+  }
+
+  const properties = mapPropertiesFromApi(listingRows);
 
   return (
     <main style={{ background: 'var(--bg-dark)', minHeight: '100vh' }}>

@@ -1,39 +1,42 @@
-import { createClient } from "@/lib/supabase/client";
+// Helpers de cliente para /api/favorites (usar desde componentes 'use client').
+// La sesión viaja por cookies; el servidor deriva el user_id (no se envía desde el cliente).
 
-export async function addFavorite(userId: string, propertyId: string) {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("favorites")
-    .insert([{ user_id: userId, property_id: propertyId }]);
-  return { data, error };
+export type FavoritesResult = { ok: boolean; error?: string };
+
+async function parseError(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as { error?: string };
+    return body.error ?? `Error ${res.status}`;
+  } catch {
+    return `Error ${res.status}`;
+  }
 }
 
-export async function removeFavorite(userId: string, propertyId: string) {
-  const supabase = createClient();
-  const { error } = await supabase
-    .from("favorites")
-    .delete()
-    .eq("user_id", userId)
-    .eq("property_id", propertyId);
-  return { error };
+export async function getFavoriteIds(): Promise<string[]> {
+  const res = await fetch('/api/favorites', { credentials: 'same-origin', cache: 'no-store' });
+  if (!res.ok) return [];
+  const body = (await res.json()) as { ids?: string[] };
+  return body.ids ?? [];
 }
 
-export async function getUserFavorites(userId: string) {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("favorites")
-    .select("property_id")
-    .eq("user_id", userId);
-  return { data, error };
+export async function addFavorite(listingId: string): Promise<FavoritesResult> {
+  const res = await fetch('/api/favorites', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ listingId }),
+  });
+  return res.ok ? { ok: true } : { ok: false, error: await parseError(res) };
 }
 
-export async function isFavorited(userId: string, propertyId: string) {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("favorites")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("property_id", propertyId)
-    .single();
-  return { isFavorited: !!data, error };
+export async function removeFavorite(listingId: string): Promise<FavoritesResult> {
+  const res = await fetch(`/api/favorites?listingId=${encodeURIComponent(listingId)}`, {
+    method: 'DELETE',
+    credentials: 'same-origin',
+  });
+  return res.ok ? { ok: true } : { ok: false, error: await parseError(res) };
+}
+
+export async function toggleFavorite(listingId: string, isFavorite: boolean): Promise<FavoritesResult> {
+  return isFavorite ? removeFavorite(listingId) : addFavorite(listingId);
 }

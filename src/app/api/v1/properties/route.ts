@@ -1,69 +1,62 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { validateApiKey, apiError } from '@/lib/api/validate-key';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { checkApiKey, apiError, rateLimitHeaders, intParam, numParam } from '@/lib/api/validate-key';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-);
+export const dynamic = 'force-dynamic';
+
+const LIST_COLUMNS =
+  'id, title, type, operation_type, location, city, price, currency, bedrooms, bathrooms, sqm, image, images, featured, status, created_at';
+
+/** Escapa comodines de LIKE en input del usuario. */
+function likeEscape(s: string): string {
+  return s.replace(/[\%_]/g, (m) => `\${m}`);
+}
 
 export async function GET(req: Request) {
-  const validated = await validateApiKey(req);
-  if (!validated) return apiError('API key inválida o límite diario alcanzado', 401);
+  const auth = await checkApiKey(req);
+  if (!auth.ok) return apiError(auth.message, auth.status);
+  const headers = rateLimitHeaders(auth.key.remaining);
 
   const { searchParams } = new URL(req.url);
+  const page = intParam(searchParams.get('page'), 1, 1, 10_000);
+  const limit = intParam(searchParams.get('limit'), 20, 1, 100);
+  const offset = (page - 1) * limit;
 
-  const page    = Math.max(1, parseInt(searchParams.get('page') ?? '1'));
-  const limit   = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') ?? '20')));
-  const offset  = (page - 1) * limit;
+  const ciudad = searchParams.get('ciudad')?.trim().slice(0, 80);
+  const tipo = searchParams.get('tipo')?.trim().slice(0, 40);
+  const operacion = searchParams.get('operacion')?.trim().slice(0, 20);
+  const precioMin = numParam(searchParams.get('precio_min'));
+  const precioMax = numParam(searchParams.get('precio_max'));
+  const dormMinRaw = numParam(searchParams.get('dormitorios_min'));
+  const ascending = searchParams.get('order') === 'asc';
 
-  const ciudad    = searchParams.get('ciudad');
-  const tipo      = searchParams.get('tipo');
-  const precioMin = searchParams.get('precio_min');
-  const precioMax = searchParams.get('precio_max');
-  const dormMin   = searchParams.get('dormitorios_min');
-  const order     = searchParams.get('order') === 'asc' ? true : false; // precio asc/desc
-
-  let query = supabaseAdmin
-    .from('properties')
-    .select(
-      'id, title, type, location, city, price, currency, bedrooms, bathrooms, sqm, images, featured, status, created_at',
-      { count: 'exact' }
-    )
+  let query = createAdminClient()
+    .from('properties_full')
+    .select(LIST_COLUMNS, { count: 'exact' })
     .eq('status', 'active');
 
-  if (ciudad)    query = query.ilike('city', `%${ciudad}%`);
-  if (tipo)      query = query.eq('type', tipo);
-  if (precioMin) query = query.gte('price', parseFloat(precioMin));
-  if (precioMax) query = query.lte('price', parseFloat(precioMax));
-  if (dormMin)   query = query.gte('bedrooms', parseInt(dormMin));
+  if (ciudad) query = query.ilike('city', `%${likeEscape(ciudad)}%`);
+  if (tipo) query = query.eq('type', tipo);
+  if (operacion) query = query.eq('operation_type', operacion);
+  if (precioMin != null) query = query.gte('price', precioMin);
+  if (precioMax != null) query = query.lte('price', precioMax);
+  if (dormMinRaw != null) query = query.gte('bedrooms', Math.floor(dormMinRaw));
 
-  query = query
+  const { data, error, count } = await query
     .order('featured', { ascending: false })
-    .order('price', { ascending: order })
+    .order('price', { ascending })
     .range(offset, offset + limit - 1);
 
-  const { data, error, count } = await query;
+  if (error) return apiError('Error al obtener propiedades', 500, headers);
 
-  if (error) return apiError('Error al obtener propiedades', 500);
+  const total = count ?? 0;
+  const totalPages = Math.ceil(total / limit);
 
-  const totalPages = Math.ceil((count ?? 0) / limit);
-
-  return NextResponse.json({
-    data,
-    meta: {
-      total: count ?? 0,
-      page,
-      limit,
-      total_pages: totalPages,
-      has_next: page < totalPages,
+  return NextResponse.json(
+    {
+      data: data ?? [],
+      meta: { total, page, limit, total_pages: totalPages, has_next: page < totalPages },
     },
-  }, {
-    headers: {
-      'X-RateLimit-Limit': '1000',
-      'X-RateLimit-Remaining': '999', // simplificado
-      'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
-    }
-  });
+    { headers },
+  );
 }

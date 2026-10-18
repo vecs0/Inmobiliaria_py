@@ -7,7 +7,7 @@
  * Ejemplo desde un componente:
  * ```tsx
  * const result = await checkSupabaseConnection();
- * console.log(result); // { ok: true, latency: 45, propertiesCount: 6 }
+ * // result // { ok: true, latency: 45, propertiesCount: 6 }
  * ```
  */
 
@@ -29,7 +29,7 @@ export async function checkSupabaseConnection(): Promise<HealthCheckResult> {
 
     // Test 1: Verificar propiedades
     const { count: propertiesCount, error: propertiesError } = await supabase
-      .from('properties')
+      .from('listings')
       .select('*', { count: 'exact', head: true });
 
     if (propertiesError) throw propertiesError;
@@ -68,7 +68,7 @@ export async function testISRCache() {
 
   // Fetch con caché de 60 segundos
   const { data, error } = await supabase
-    .from('properties')
+    .from('listings')
     .select('id, title, featured')
     .eq('featured', true)
     .limit(3);

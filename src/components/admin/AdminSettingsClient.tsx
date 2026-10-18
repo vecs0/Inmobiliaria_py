@@ -2,102 +2,38 @@
 
 import React from 'react';
 
+const ROWS: { section: string; items: { label: string; value: string }[] }[] = [
+  {
+    section: 'General',
+    items: [
+      { label: 'Sitio', value: 'InmobiliariaPY' },
+      { label: 'URL base', value: process.env.NEXT_PUBLIC_APP_URL || '(NEXT_PUBLIC_APP_URL sin definir)' },
+    ],
+  },
+  {
+    section: 'Moneda',
+    items: [{ label: 'Tipo de cambio USD/PYG', value: process.env.NEXT_PUBLIC_USD_PYG_RATE || '7800 (por defecto)' }],
+  },
+];
+
 export function AdminSettingsClient() {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px' }}>
-      <SettingsSection
-        title="Configuración General"
-        fields={[
-          { label: 'Nombre del sitio', type: 'text', defaultValue: 'InmobiliariaPY' },
-          { label: 'Email de contacto', type: 'email', defaultValue: 'contacto@inmobiliariapy.com' },
-          { label: 'URL del sitio', type: 'url', defaultValue: 'https://inmobiliariapy.com' },
-        ]}
-      />
-      <SettingsSection
-        title="Configuración de Pagos"
-        fields={[
-          { label: 'Stripe Publishable Key', type: 'password', defaultValue: '' },
-          { label: 'Moneda por defecto', type: 'select', options: ['USD', 'PYG'], defaultValue: 'USD' },
-        ]}
-      />
-      <SettingsSection
-        title="Configuración de Email"
-        fields={[
-          { label: 'Resend API Key', type: 'password', defaultValue: '' },
-          { label: 'Email de envío', type: 'email', defaultValue: 'noreply@inmobiliariapy.com' },
-        ]}
-      />
-      <SettingsSection
-        title="Límites y Cuotas"
-        fields={[
-          { label: 'Máximo propiedades gratis', type: 'number', defaultValue: '3' },
-          { label: 'Máximo agentes (empresa)', type: 'number', defaultValue: '3' },
-        ]}
-      />
-    </div>
-  );
-}
-
-function SettingsSection({ title, fields }: { title: string; fields: any[] }) {
-  return (
-    <div style={{ background: 'var(--bg-mid)', border: '1px solid var(--gray-line)', borderRadius: '12px', padding: '24px' }}>
-      <h3 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--white)', marginBottom: '20px' }}>{title}</h3>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        {fields.map((field, index) => (
-          <div key={index}>
-            <label style={{ display: 'block', color: 'var(--gray)', fontSize: '14px', marginBottom: '8px' }}>
-              {field.label}
-            </label>
-            {field.type === 'select' ? (
-              <select
-                defaultValue={field.defaultValue}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  background: 'var(--bg-dark)',
-                  border: '1px solid var(--gray-line)',
-                  borderRadius: '8px',
-                  color: 'var(--white)',
-                  fontSize: '14px',
-                }}
-              >
-                {field.options?.map((opt: string) => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type={field.type}
-                defaultValue={field.defaultValue}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  background: 'var(--bg-dark)',
-                  border: '1px solid var(--gray-line)',
-                  borderRadius: '8px',
-                  color: 'var(--white)',
-                  fontSize: '14px',
-                }}
-              />
-            )}
-          </div>
-        ))}
-        <button
-          style={{
-            marginTop: '8px',
-            padding: '10px 20px',
-            background: 'var(--gold)',
-            border: 'none',
-            borderRadius: '8px',
-            color: 'var(--white)',
-            fontSize: '14px',
-            fontWeight: '500',
-            cursor: 'pointer',
-          }}
-        >
-          Guardar cambios
-        </button>
+    <div style={{ display: 'grid', gap: 24, maxWidth: 720 }}>
+      <div style={{ background: 'var(--bg-mid)', border: '1px solid var(--gray-line)', borderRadius: 12, padding: 16, color: 'var(--gray)', fontSize: 14, lineHeight: 1.5 }}>
+        Esta página es de solo lectura. La configuración (Stripe, Resend, límites de plan, tipo de cambio) se define mediante
+        variables de entorno en Vercel y las tablas <code>plans</code> / migraciones de Supabase; no hay una tabla de ajustes editable.
       </div>
+      {ROWS.map((r) => (
+        <div key={r.section} style={{ background: 'var(--bg-mid)', border: '1px solid var(--gray-line)', borderRadius: 12, padding: 24 }}>
+          <h3 style={{ fontSize: 18, fontWeight: 600, color: 'var(--white)', marginBottom: 16 }}>{r.section}</h3>
+          {r.items.map((i) => (
+            <div key={i.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '8px 0', fontSize: 14, flexWrap: 'wrap' }}>
+              <span style={{ color: 'var(--gray)' }}>{i.label}</span>
+              <span style={{ color: 'var(--white)', wordBreak: 'break-all' }}>{i.value}</span>
+            </div>
+          ))}
+        </div>
+      ))}
     </div>
   );
 }

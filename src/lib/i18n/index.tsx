@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, ReactNode } from 'react';
 import es from './es.json';
 import en from './en.json';
 
@@ -11,10 +11,27 @@ type Translations = typeof es;
 
 const dictionaries: Record<Locale, Translations> = { es, en };
 
+const PYG_RATE = Number(process.env.NEXT_PUBLIC_USD_PYG_RATE) || 7800;
+
 const EXCHANGE_RATES: Record<Currency, number> = {
   USD: 1,
-  PYG: 7800, // Approximate exchange rate
+  PYG: PYG_RATE, // 1 USD = PYG_RATE PYG (env NEXT_PUBLIC_USD_PYG_RATE)
 };
+
+export function convertAmount(amount: number, from: Currency, to: Currency): number {
+  return (amount / EXCHANGE_RATES[from]) * EXCHANGE_RATES[to];
+}
+
+/** Standalone formatter (usable in server or client code). Amount is interpreted in `from` (default USD). */
+export function formatPrice(amount: number, currency: Currency = 'USD', from: Currency = 'USD'): string {
+  const value = convertAmount(amount, from, currency);
+  return new Intl.NumberFormat(currency === 'USD' ? 'en-US' : 'es-PY', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
+}
 
 interface I18nContextValue {
   locale: Locale;
@@ -32,20 +49,26 @@ const I18nContext = createContext<I18nContextValue>({
   t: (key) => key,
   setLocale: () => {},
   setCurrency: () => {},
-  formatPrice: (amount) => amount.toString(),
+  formatPrice: (amount) => formatPrice(amount, 'USD'),
   convertPrice: (amount) => amount,
 });
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(() => {
-    if (typeof window === 'undefined') return 'es';
-    return (localStorage.getItem('impy_locale') as Locale) ?? 'es';
-  });
+  const [locale, setLocaleState] = useState<Locale>('es');
+  const [currency, setCurrencyState] = useState<Currency>('USD');
 
-  const [currency, setCurrencyState] = useState<Currency>(() => {
-    if (typeof window === 'undefined') return 'USD';
-    return (localStorage.getItem('impy_currency') as Currency) ?? 'USD';
-  });
+  useEffect(() => {
+    try {
+      const l = localStorage.getItem('impy_locale');
+      const c = localStorage.getItem('impy_currency');
+      if (l === 'es' || l === 'en') setLocaleState(l);
+      if (c === 'USD' || c === 'PYG') setCurrencyState(c);
+    } catch { /* storage unavailable */ }
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
 
   const setLocale = useCallback((next: Locale) => {
     setLocaleState(next);
@@ -67,33 +90,20 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     return typeof value === 'string' ? value : key;
   }, [locale]);
 
-  const convertPrice = useCallback((amount: number, from: Currency, to: Currency): number => {
-    const inUSD = amount / EXCHANGE_RATES[from];
-    return inUSD * EXCHANGE_RATES[to];
-  }, []);
+  const convertPrice = convertAmount;
 
-  const formatPrice = useCallback((amount: number, fromCurrency: Currency = 'USD'): string => {
-    const convertedAmount = convertPrice(amount, fromCurrency, currency);
-    
-    if (currency === 'USD') {
-      return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-      }).format(convertedAmount);
-    } else {
-      return new Intl.NumberFormat('es-PY', {
-        style: 'currency',
-        currency: 'PYG',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-      }).format(convertedAmount);
-    }
-  }, [currency, convertPrice]);
+  const formatPriceCtx = useCallback(
+    (amount: number, fromCurrency: Currency = 'USD'): string => formatPrice(amount, currency, fromCurrency),
+    [currency],
+  );
+
+  const value = useMemo(
+    () => ({ locale, currency, t, setLocale, setCurrency, formatPrice: formatPriceCtx, convertPrice }),
+    [locale, currency, t, setLocale, setCurrency, formatPriceCtx, convertPrice],
+  );
 
   return (
-    <I18nContext.Provider value={{ locale, currency, t, setLocale, setCurrency, formatPrice, convertPrice }}>
+    <I18nContext.Provider value={value}>
       {children}
     </I18nContext.Provider>
   );
@@ -101,4 +111,9 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
 export function useTranslation() {
   return useContext(I18nContext);
+}
+
+/** Returns (amount, from?) => string formatted in the user's selected currency. */
+export function useFormatPrice() {
+  return useContext(I18nContext).formatPrice;
 }

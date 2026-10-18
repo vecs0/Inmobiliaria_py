@@ -1,10 +1,10 @@
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { AdminDashboardClient } from '@/components/admin/AdminDashboardClient';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminDashboardPage() {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   // Fetch dashboard stats
   const [
@@ -13,7 +13,7 @@ export default async function AdminDashboardPage() {
     { count: activeListings },
     { count: totalSellers },
   ] = await Promise.all([
-    supabase.from('auth.users').select('*', { count: 'exact', head: true }),
+    supabase.from('profiles').select('*', { count: 'exact', head: true }),
     supabase.from('listings').select('*', { count: 'exact', head: true }),
     supabase.from('listings').select('*', { count: 'exact', head: true }).eq('status', 'active'),
     supabase.from('seller_profiles').select('*', { count: 'exact', head: true }),
@@ -26,11 +26,10 @@ export default async function AdminDashboardPage() {
     .order('created_at', { ascending: false })
     .limit(10);
 
-  const { data: recentUsers } = await supabase
-    .from('auth.users')
-    .select('id, email, created_at, raw_user_meta_data')
-    .order('created_at', { ascending: false })
-    .limit(10);
+  const { data: usersPage } = await supabase.auth.admin.listUsers({ page: 1, perPage: 10 });
+  const recentUsers = (usersPage?.users ?? [])
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .map((u) => ({ id: u.id, email: u.email, created_at: u.created_at, raw_user_meta_data: u.user_metadata }));
 
   const stats = {
     totalUsers: totalUsers || 0,
@@ -47,7 +46,7 @@ export default async function AdminDashboardPage() {
       <AdminDashboardClient 
         stats={stats}
         recentListings={recentListings || []}
-        recentUsers={recentUsers || []}
+        recentUsers={recentUsers}
       />
     </div>
   );

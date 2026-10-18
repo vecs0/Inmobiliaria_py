@@ -1,0 +1,23 @@
+import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js';
+
+// Cliente con service role: SOLO servidor (webhooks, cron, API pública).
+// Nunca importar desde componentes 'use client'. Bypassa RLS.
+let cached: SupabaseClient | null = null;
+
+export function createAdminClient(): SupabaseClient {
+  if (typeof window !== 'undefined') {
+    throw new Error('createAdminClient() no puede usarse en el navegador');
+  }
+  if (cached) return cached;
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    throw new Error('Faltan NEXT_PUBLIC_SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY');
+  }
+
+  cached = createSupabaseClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  return cached;
+}

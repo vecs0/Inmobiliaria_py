@@ -7,13 +7,11 @@ export function useServiceWorker() {
 
   useEffect(() => {
     setIsSupported('serviceWorker' in navigator && 'PushManager' in window);
-    setPermission(Notification.permission);
+    if (typeof Notification !== 'undefined') setPermission(Notification.permission);
 
     // Register service worker
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').then((registration) => {
-        console.log('Service Worker registered:', registration);
-      }).catch((error) => {
+      navigator.serviceWorker.register('/sw.js').catch((error) => {
         console.error('Service Worker registration failed:', error);
       });
     }

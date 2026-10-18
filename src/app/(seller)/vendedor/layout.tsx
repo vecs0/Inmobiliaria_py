@@ -9,20 +9,20 @@ export const revalidate = 0;
 
 export default async function SellerLayout({ children }: { children: React.ReactNode }) {
   const userCtx = await getUserContext();
-  if (!userCtx) redirect('/auth/login');
+  if (!userCtx) redirect('/auth/login?redirect=/vendedor');
   if (userCtx.role === 'buyer') redirect('/comprador');
 
   const ctx = await fetchSellerShellContext();
-  if (!ctx) redirect('/auth/login');
+  if (!ctx) redirect('/auth/login?redirect=/vendedor');
 
   const isEmpresa = userCtx.role === 'seller_empresa';
 
   return (
-  <>
+    <>
       <SellerShell plan={ctx.plan} unreadLeads={ctx.unreadLeads} isEmpresa={isEmpresa}>
         {children}
       </SellerShell>
-      <DemoPageSwitcher />
+      {process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && <DemoPageSwitcher />}
     </>
   );
 }

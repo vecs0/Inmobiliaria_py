@@ -9,7 +9,7 @@ const spec = {
     contact: { email: 'api@inmobiliariapy.com' },
   },
   servers: [
-    { url: `${process.env.NEXT_PUBLIC_SITE_URL ?? 'https://inmobiliariapy.com'}/api/v1`, description: 'Producción' },
+    { url: `${(process.env.NEXT_PUBLIC_APP_URL ?? 'https://inmobiliariapy.com').replace(/\/+$/, '')}/api/v1`, description: 'Producción' },
   ],
   security: [{ bearerAuth: [] }],
   components: {
@@ -79,7 +79,7 @@ const spec = {
         tags: ['Propiedades'],
         parameters: [
           { name: 'page',           in: 'query', schema: { type: 'integer', default: 1 }, description: 'Número de página' },
-          { name: 'limit',          in: 'query', schema: { type: 'integer', default: 20, maximum: 50 }, description: 'Items por página (máx 50)' },
+          { name: 'limit',          in: 'query', schema: { type: 'integer', default: 20, maximum: 100 }, description: 'Items por página (máx 100)' },
           { name: 'ciudad',         in: 'query', schema: { type: 'string' }, description: 'Filtrar por ciudad (ej: Asunción)' },
           { name: 'tipo',           in: 'query', schema: { type: 'string', enum: ['Casa', 'Apartamento', 'Penthouse', 'Terreno', 'Oficina'] }, description: 'Tipo de propiedad' },
           { name: 'precio_min',     in: 'query', schema: { type: 'number' }, description: 'Precio mínimo en USD' },

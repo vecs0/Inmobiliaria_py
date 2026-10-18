@@ -1,7 +1,5 @@
 'use server';
 
-import { properties, agents, cities as dataCities, propertyTypes as dataPropertyTypes } from '../data';
-import { revalidateTag } from 'next/cache';
 import { createClient } from './server';
 
 export interface PropertyFilters {
@@ -23,7 +21,7 @@ export interface PaginatedResponse<T> {
 export async function getProperties(
   filters: PropertyFilters = {},
   options: { page?: number; pageSize?: number; revalidate?: boolean } = {}
-): Promise<PaginatedResponse<any>> {
+): Promise<PaginatedResponse<Record<string, any>>> {
   try {
     const supabase = await createClient();
     let query = supabase
@@ -165,109 +163,5 @@ export async function getFeaturedProperties(limit = 6) {
   }
 }
 
-export async function getCities() {
-  try {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from('properties')
-      .select('location')
-      .eq('status', 'active');
-    if (error || !data) return [...dataCities];
-    const unique = Array.from(new Set(data.map((r: any) => r.location).filter(Boolean))).sort();
-    return unique.length > 0 ? unique : [...dataCities];
-  } catch {
-    return [...dataCities];
-  }
-}
-
-export async function getPropertyTypes() {
-  return [...dataPropertyTypes];
-}
-
-export async function getAgents() {
-  return [...agents];
-}
-
-export interface DashboardStats {
-  activeProperties: number;
-  featuredProperties: number;
-  pendingProperties: number;
-}
-
-export async function getStats(): Promise<DashboardStats> {
-  try {
-    const supabase = await createClient();
-    const [activeRes, featuredRes, pendingRes] = await Promise.all([
-      supabase.from('properties').select('id', { count: 'exact', head: true }).eq('status', 'active'),
-      supabase.from('properties').select('id', { count: 'exact', head: true }).eq('featured', true),
-      supabase.from('properties').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-    ]);
-    return {
-      activeProperties: activeRes.count ?? 0,
-      featuredProperties: featuredRes.count ?? 0,
-      pendingProperties: pendingRes.count ?? 0,
-    };
-  } catch {
-    return { activeProperties: 0, featuredProperties: 0, pendingProperties: 0 };
-  }
-}
-
-export async function revalidateProperties() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (revalidateTag as any)('properties');
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (revalidateTag as any)('featured-properties');
-}
-
-export async function createProperty(property: any) {
-  try {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from('properties')
-      .insert([property])
-      .select()
-      .single();
-
-    if (error) throw error;
-    await revalidateProperties();
-    return data;
-  } catch (err) {
-    console.error('Error creating property:', err);
-    throw err;
-  }
-}
-
-export async function updateProperty(id: string, updates: any) {
-  try {
-    const supabase = await createClient();
-    // Actualizamos la tabla 'listings' ya que el ID de la vista es el ID del listing
-    const { data, error } = await supabase
-      .from('listings')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) throw error;
-    await revalidateProperties();
-    return data;
-  } catch (err) {
-    console.error('Error updating property listing:', err);
-    throw err;
-  }
-}
-
-export async function deleteProperty(id: string) {
-  try {
-    const supabase = await createClient();
-    const { error } = await supabase
-      .from('listings')
-      .delete()
-      .eq('id', id);
-
-    if (error) throw error;
-    return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
-  }
-}
+// Nota: createProperty/updateProperty/deleteProperty/getStats/getCities eliminados (sin uso,
+// mass-assignment sobre tablas legacy). Usar src/lib/actions/properties.ts.

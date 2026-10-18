@@ -1,32 +1,30 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { validateApiKey, apiError } from '@/lib/api/validate-key';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { checkApiKey, apiError, rateLimitHeaders } from '@/lib/api/validate-key';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-);
+export const dynamic = 'force-dynamic';
+
+const DETAIL_COLUMNS =
+  'id, title, type, operation_type, location, city, neighborhood, price, currency, bedrooms, bathrooms, sqm, image, images, description, amenities, featured, status, latitude, longitude, created_at';
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const resolvedParams = await params;
-  const validated = await validateApiKey(req);
-  if (!validated) return apiError('API key inválida o límite diario alcanzado', 401);
+  const { id } = await params;
 
-  const { data, error } = await supabaseAdmin
-    .from('properties')
-    .select(
-      'id, title, type, location, city, neighborhood, price, currency, bedrooms, bathrooms, sqm, images, description, amenities, featured, status, latitude, longitude, created_at'
-    )
-    .eq('id', resolvedParams.id)
+  const auth = await checkApiKey(req);
+  if (!auth.ok) return apiError(auth.message, auth.status);
+  const headers = rateLimitHeaders(auth.key.remaining);
+
+  if (!id || id.length > 64) return apiError('Propiedad no encontrada', 404, headers);
+
+  const { data, error } = await createAdminClient()
+    .from('properties_full')
+    .select(DETAIL_COLUMNS)
+    .eq('id', id)
     .eq('status', 'active')
-    .single();
+    .maybeSingle();
 
-  if (error || !data) return apiError('Propiedad no encontrada', 404);
+  if (error) return apiError('Error al obtener la propiedad', 500, headers);
+  if (!data) return apiError('Propiedad no encontrada', 404, headers);
 
-  return NextResponse.json({ data }, {
-    headers: {
-      'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
-    }
-  });
+  return NextResponse.json({ data }, { headers });
 }

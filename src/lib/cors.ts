@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-// Usa NEXT_PUBLIC_SITE_URL (estándar de Next.js) o ALLOWED_ORIGIN (custom)
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+// Usa NEXT_PUBLIC_APP_URL (estándar de Next.js) o ALLOWED_ORIGIN (custom)
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
 export function addCorsHeaders(response: NextResponse): NextResponse {
   const newResponse = new NextResponse(response.body, {

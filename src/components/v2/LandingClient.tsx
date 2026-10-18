@@ -3,33 +3,82 @@
 import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { PROPERTIES, ZONES, IMG } from '@/lib/v2-data';
+import { ZONES, PROPERTY_TYPES } from '@/lib/v2-data';
 import { PropertyCard } from '@/components/v2/PropertyCard';
 import { mapPropertiesFromApi } from '@/lib/property-adapter';
-
+import { createClient } from '@/lib/supabase/client';
 
 interface LandingClientProps {
-  featuredProperties?: any[];
+  featuredProperties?: Record<string, unknown>[];
 }
+
+type LiveStats = { total: number | null; cities: number | null; zones: Record<string, number> };
+
+/** Conteos reales desde properties_full (cliente, anon key + RLS). */
+function useLiveStats(): LiveStats {
+  const [stats, setStats] = React.useState<LiveStats>({ total: null, cities: null, zones: {} });
+  React.useEffect(() => {
+    let cancelled = false;
+    const supabase = createClient();
+    (async () => {
+      try {
+        const [totalRes, cityRes, ...zoneRes] = await Promise.all([
+          supabase.from('properties_full').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+          supabase.from('properties_full').select('city').eq('status', 'active').limit(1000),
+          ...ZONES.map((z) =>
+            supabase
+              .from('properties_full')
+              .select('id', { count: 'exact', head: true })
+              .eq('status', 'active')
+              .or(`city.ilike.%${z.match}%,neighborhood.ilike.%${z.match}%`)
+          ),
+        ]);
+        if (cancelled) return;
+        const cities = new Set(((cityRes.data ?? []) as { city: string | null }[]).map((r) => r.city).filter(Boolean));
+        const zones: Record<string, number> = {};
+        ZONES.forEach((z, i) => {
+          zones[z.slug] = zoneRes[i]?.count ?? 0;
+        });
+        setStats({ total: totalRes.count ?? 0, cities: cities.size, zones });
+      } catch {
+        /* sin conteos: se ocultan */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return stats;
+}
+
+const BUDGETS: Record<string, { min?: number; max?: number }> = {
+  '100-200': { min: 100000, max: 200000 },
+  '200-400': { min: 200000, max: 400000 },
+  '400-700': { min: 400000, max: 700000 },
+  '700+': { min: 700000 },
+};
 
 export function LandingClient({ featuredProperties = [] }: LandingClientProps) {
   const router = useRouter();
-
-  // Use real data when available, fall back to mock
-  const displayProps = featuredProperties.length > 0
-    ? mapPropertiesFromApi(featuredProperties)
-    : PROPERTIES;
+  const displayProps = React.useMemo(() => mapPropertiesFromApi(featuredProperties), [featuredProperties]);
+  const stats = useLiveStats();
 
   const [searchCity, setSearchCity] = React.useState('');
   const [searchType, setSearchType] = React.useState('');
   const [searchBudget, setSearchBudget] = React.useState('');
 
-  const handleSearch = () => {
+  const handleSearch = (e?: React.FormEvent) => {
+    e?.preventDefault();
     const params = new URLSearchParams();
     if (searchCity) params.set('ciudad', searchCity);
     if (searchType) params.set('tipo', searchType);
+    const b = BUDGETS[searchBudget];
+    if (b?.min) params.set('precio_min', String(b.min));
+    if (b?.max) params.set('precio_max', String(b.max));
     router.push('/propiedades' + (params.toString() ? '?' + params.toString() : ''));
   };
+
+  const totalLabel = stats.total != null && stats.total > 0 ? stats.total.toLocaleString('es-PY') : null;
 
   return (
     <div className="page-landing">
@@ -45,33 +94,35 @@ export function LandingClient({ featuredProperties = [] }: LandingClientProps) {
             <span className="line"><span className="word w2 l2">próxima</span></span>
             <span className="line"><span className="word w3 l3">propiedad.</span></span>
           </h1>
-          <p className="sub">Más de 500 propiedades curadas en las mejores zonas del país. De penthouses en Asunción a residencias frente al lago en Ypacaraí.</p>
+          <p className="sub">
+            {totalLabel ? `${totalLabel} propiedades` : 'Propiedades'} en las mejores zonas del país. De penthouses en Asunción a residencias frente al lago en Ypacaraí.
+          </p>
 
-          <div className="glass-search">
+          <form className="glass-search" onSubmit={handleSearch} role="search">
             <div className="field">
-              <label>Ciudad</label>
-              <select value={searchCity} onChange={e => setSearchCity(e.target.value)}>
+              <label htmlFor="hero-city">Ciudad</label>
+              <select id="hero-city" value={searchCity} onChange={e => setSearchCity(e.target.value)}>
                 <option value="">Todas</option>
-                <option value="Asuncion">Asunción</option>
-                <option value="Lambare">Lambaré</option>
+                <option value="Asunción">Asunción</option>
+                <option value="Lambaré">Lambaré</option>
                 <option value="San Lorenzo">San Lorenzo</option>
+                <option value="Luque">Luque</option>
                 <option value="Ciudad del Este">Ciudad del Este</option>
-                <option value="Encarnacion">Encarnación</option>
+                <option value="Encarnación">Encarnación</option>
               </select>
             </div>
             <div className="field">
-              <label>Tipo</label>
-              <select value={searchType} onChange={e => setSearchType(e.target.value)}>
+              <label htmlFor="hero-type">Tipo</label>
+              <select id="hero-type" value={searchType} onChange={e => setSearchType(e.target.value)}>
                 <option value="">Todos</option>
-                <option value="Casa">Casa</option>
-                <option value="Departamento">Departamento</option>
-                <option value="Loft">Loft</option>
-                <option value="Terreno">Terreno</option>
+                {PROPERTY_TYPES.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
               </select>
             </div>
             <div className="field">
-              <label>Presupuesto</label>
-              <select value={searchBudget} onChange={e => setSearchBudget(e.target.value)}>
+              <label htmlFor="hero-budget">Presupuesto</label>
+              <select id="hero-budget" value={searchBudget} onChange={e => setSearchBudget(e.target.value)}>
                 <option value="">Cualquiera</option>
                 <option value="100-200">USD 100k – 200k</option>
                 <option value="200-400">USD 200k – 400k</option>
@@ -79,8 +130,8 @@ export function LandingClient({ featuredProperties = [] }: LandingClientProps) {
                 <option value="700+">USD 700k+</option>
               </select>
             </div>
-            <button className="search-btn" data-cursor="hover" onClick={handleSearch}>→</button>
-          </div>
+            <button type="submit" className="search-btn" data-cursor="hover" aria-label="Buscar propiedades">→</button>
+          </form>
         </div>
 
         <div className="scroll-indicator">
@@ -94,17 +145,25 @@ export function LandingClient({ featuredProperties = [] }: LandingClientProps) {
         <div className="marquee-track">
           {[0, 1].map(rep => (
             <React.Fragment key={rep}>
-              <span className="marquee-item"><span className="num">500+</span><span className="label">Propiedades</span></span>
+              {totalLabel && (
+                <>
+                  <span className="marquee-item"><span className="num">{totalLabel}</span><span className="label">Propiedades</span></span>
+                  <span className="marquee-sep">·</span>
+                </>
+              )}
+              {stats.cities != null && stats.cities > 0 && (
+                <>
+                  <span className="marquee-item"><span className="num">{stats.cities}</span><span className="label">Ciudades</span></span>
+                  <span className="marquee-sep">·</span>
+                </>
+              )}
+              <span className="marquee-item"><span className="num">Venta</span><span className="label">y alquiler</span></span>
               <span className="marquee-sep">·</span>
-              <span className="marquee-item"><span className="num">20+</span><span className="label">Ciudades</span></span>
+              <span className="marquee-item"><span className="num">Sin</span><span className="label">duplicados</span></span>
               <span className="marquee-sep">·</span>
-              <span className="marquee-item"><span className="num">4.9</span><span className="star">★</span><span className="label">Calificación</span></span>
+              <span className="marquee-item"><span className="num">API</span><span className="label">para agencias</span></span>
               <span className="marquee-sep">·</span>
-              <span className="marquee-item"><span className="num">USD 50M+</span><span className="label">En propiedades</span></span>
-              <span className="marquee-sep">·</span>
-              <span className="marquee-item"><span className="num">85+</span><span className="label">Vendedores activos</span></span>
-              <span className="marquee-sep">·</span>
-              <span className="marquee-item"><span className="num">12k+</span><span className="label">Usuarios mensuales</span></span>
+              <span className="marquee-item"><span className="num">IA</span><span className="label">Búsqueda semántica</span></span>
               <span className="marquee-sep">·</span>
             </React.Fragment>
           ))}
@@ -124,13 +183,22 @@ export function LandingClient({ featuredProperties = [] }: LandingClientProps) {
           </div>
         </div>
 
-        <div className="bento">
-          <div className="a">
-            <PropertyCard p={displayProps[0]} size="large" />
+        {displayProps.length === 0 ? (
+          <div style={{ maxWidth: 720, margin: '0 auto', textAlign: 'center', padding: '64px 24px', border: '1px dashed var(--gray-line)', borderRadius: 16 }}>
+            <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: 28, fontWeight: 300, marginBottom: 12 }}>
+              Pronto vas a ver <span style={{ fontStyle: 'italic', color: 'var(--gold)' }}>destacadas</span> acá.
+            </h3>
+            <p style={{ color: 'var(--gray)' }}>Mientras tanto, explorá todo el catálogo disponible.</p>
           </div>
-          {displayProps[1] && <PropertyCard p={displayProps[1]} />}
-          {displayProps[2] && <PropertyCard p={displayProps[2]} />}
-        </div>
+        ) : (
+          <div className="bento">
+            <div className="a">
+              <PropertyCard p={displayProps[0]} size="large" />
+            </div>
+            {displayProps[1] && <PropertyCard p={displayProps[1]} />}
+            {displayProps[2] && <PropertyCard p={displayProps[2]} />}
+          </div>
+        )}
 
         {displayProps.length > 3 && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px', marginTop: '24px', maxWidth: '1440px', marginLeft: 'auto', marginRight: 'auto' }}>
@@ -155,7 +223,7 @@ export function LandingClient({ featuredProperties = [] }: LandingClientProps) {
             <span style={{ color: 'var(--gold)' }}>← desliza horizontalmente</span>
           </div>
         </div>
-        <ZonesTrack />
+        <ZonesTrack counts={stats.zones} />
       </section>
 
       {/* CTA SPLIT */}
@@ -163,7 +231,7 @@ export function LandingClient({ featuredProperties = [] }: LandingClientProps) {
         <div className="cta-half dark" style={{ padding: '100px 60px', display: 'flex', flexDirection: 'column', position: 'relative' }}>
           <div className="eyebrow" style={{ marginBottom: '24px' }}>PARA VENDEDORES</div>
           <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '48px', marginBottom: '16px', fontWeight: 300 }}>¿Querés <span className="accent" style={{ fontStyle: 'italic', color: 'var(--gold)' }}>vender?</span></h3>
-          <p style={{ color: 'var(--gray)', fontSize: '16px', maxWidth: '400px', marginBottom: '40px', lineHeight: 1.6 }}>Publicá tu propiedad en menos de 5 minutos. Llegamos a más de 12.000 compradores activos al mes en Paraguay.</p>
+          <p style={{ color: 'var(--gray)', fontSize: '16px', maxWidth: '400px', marginBottom: '40px', lineHeight: 1.6 }}>Publicá tu propiedad en menos de 5 minutos y recibí consultas directo en tu panel.</p>
           <div>
             <Link href="/vendedor/propiedades/nueva" className="btn btn-gold" data-cursor="hover">
               Publicar propiedad <span className="btn-arrow">→</span>
@@ -191,11 +259,10 @@ export function LandingClient({ featuredProperties = [] }: LandingClientProps) {
 }
 
 // Zones track con drag-scroll + nav buttons
-function ZonesTrack() {
+function ZonesTrack({ counts }: { counts: Record<string, number> }) {
   const trackRef = React.useRef<HTMLDivElement>(null);
   const [atStart, setAtStart] = React.useState(true);
   const [atEnd, setAtEnd] = React.useState(false);
-  const router = useRouter();
 
   const updateEdges = React.useCallback(() => {
     const el = trackRef.current;
@@ -250,24 +317,33 @@ function ZonesTrack() {
       </button>
       <div className="zones-track" ref={trackRef}>
         {ZONES.map((z, i) => (
-          <article
-            key={z.name}
+          <Link
+            key={z.slug}
+            href={'/propiedades?ciudad=' + encodeURIComponent(z.match)}
             className="zone-card"
             data-cursor="crosshair"
-            onClick={() => router.push('/propiedades?ciudad=' + encodeURIComponent(z.name))}
+            draggable={false}
+            style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}
+            aria-label={`Ver propiedades en ${z.name}`}
           >
-            <img src={z.img} alt={z.name} draggable="false" />
+            <img src={z.img} alt="" draggable="false" />
             <div className="overlay">
               <div>
                 <div className="idx">0{i + 1} / 0{ZONES.length}</div>
               </div>
               <div>
                 <h3>{z.name}</h3>
-                <div className="count">{z.count} propiedades disponibles</div>
+                {counts[z.slug] != null && (
+                  <div className="count">
+                    {counts[z.slug] === 0
+                      ? 'Próximamente'
+                      : `${counts[z.slug]} ${counts[z.slug] === 1 ? 'propiedad disponible' : 'propiedades disponibles'}`}
+                  </div>
+                )}
               </div>
             </div>
             <div className="explore">Explorar →</div>
-          </article>
+          </Link>
         ))}
       </div>
       <button className={`zones-nav right ${atEnd ? 'disabled' : ''}`} onClick={() => nudge(1)} aria-label="Siguiente" data-cursor="hover">
@@ -299,16 +375,16 @@ function DarkFooterV2() {
           <h4>Empresa</h4>
           <ul>
             <li><Link href="/vendedor">Portal vendedor</Link></li>
-            <li><Link href="/">API · Widget</Link></li>
+            <li><Link href="/api-docs">API · Widget</Link></li>
             <li><Link href="/auth/register">Crear cuenta</Link></li>
           </ul>
         </div>
         <div>
           <h4>Legal</h4>
           <ul>
-            <li><Link href="/">Términos</Link></li>
-            <li><Link href="/">Privacidad</Link></li>
-            <li><Link href="/">Cookies</Link></li>
+            <li><Link href="/terminos">Términos</Link></li>
+            <li><Link href="/privacidad">Privacidad</Link></li>
+            <li><Link href="/cookies">Cookies</Link></li>
           </ul>
         </div>
       </div>

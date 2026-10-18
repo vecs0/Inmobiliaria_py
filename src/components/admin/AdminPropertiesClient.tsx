@@ -1,14 +1,32 @@
 "use client";
 
-import React from 'react';
+import React, { useState, useTransition } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { setListingStatusAdmin } from '@/app/admin/actions';
 
 interface AdminPropertiesClientProps {
   listings: any[];
 }
 
 export function AdminPropertiesClient({ listings }: AdminPropertiesClientProps) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function toggle(id: string, status: string) {
+    setError(null);
+    startTransition(async () => {
+      const res = await setListingStatusAdmin(id, status === 'active' ? 'suspended' : 'active');
+      if (!res.ok) setError(res.error ?? 'Error');
+      else router.refresh();
+    });
+  }
+
   return (
-    <div style={{ background: 'var(--bg-mid)', border: '1px solid var(--gray-line)', borderRadius: '12px', overflow: 'hidden' }}>
+    <>
+    {error && <div style={{ color: '#F87171', marginBottom: 12, fontSize: 14 }}>{error}</div>}
+    <div style={{ background: 'var(--bg-mid)', border: '1px solid var(--gray-line)', borderRadius: '12px', overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr style={{ background: 'var(--bg-dark)', borderBottom: '1px solid var(--gray-line)' }}>
@@ -45,15 +63,20 @@ export function AdminPropertiesClient({ listings }: AdminPropertiesClientProps) 
                 </span>
               </td>
               <td style={{ padding: '16px', color: 'var(--gray)', fontSize: '14px' }}>
-                {listing.seller_profiles?.company_name || '-'}
+                {listing.seller_profiles?.company_name || listing.seller_profiles?.full_name || '-'}
               </td>
               <td style={{ padding: '16px', color: 'var(--gray)', fontSize: '14px' }}>
                 {new Date(listing.created_at).toLocaleDateString('es-PY')}
               </td>
               <td style={{ padding: '16px' }}>
-                <button style={{ padding: '6px 12px', background: 'var(--bg-dark)', border: '1px solid var(--gray-line)', borderRadius: '6px', color: 'var(--white)', fontSize: '12px', cursor: 'pointer' }}>
-                  Ver
-                </button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Link href={`/propiedades/${listing.id}`} target="_blank" style={{ padding: '6px 12px', background: 'var(--bg-dark)', border: '1px solid var(--gray-line)', borderRadius: '6px', color: 'var(--white)', fontSize: '12px', cursor: 'pointer', textDecoration: 'none' }}>
+                    Ver
+                  </Link>
+                  <button type="button" disabled={pending} onClick={() => toggle(listing.id, listing.status)} style={{ padding: '6px 12px', background: 'var(--bg-dark)', border: '1px solid var(--gray-line)', borderRadius: '6px', color: 'var(--white)', fontSize: '12px', cursor: 'pointer' }}>
+                    {listing.status === 'active' ? 'Suspender' : 'Activar'}
+                  </button>
+                </div>
               </td>
             </tr>
           ))}
@@ -67,5 +90,6 @@ export function AdminPropertiesClient({ listings }: AdminPropertiesClientProps) 
         </tbody>
       </table>
     </div>
+    </>
   );
 }
