@@ -71,6 +71,7 @@ DECLARE
   v_sesion_privilegiada boolean;
   v_superusuario        boolean;
   v_cliente_local       boolean;
+  v_secreto_local       boolean;
   v_huella_local        boolean;
 BEGIN
   -- 1) Sesión privilegiada: requisito para poder escribir en `auth.*` y en
@@ -101,28 +102,38 @@ BEGIN
        OR v_client_addr << inet '::1/128'
     );
 
-  -- La huella solo es verdadera si se cumplen las TRES condiciones.
+  -- 4) Marca exclusiva del Supabase LOCAL: la CLI configura el secreto JWT
+  --    público y por defecto. Un proyecto alojado tiene un secreto propio (o no
+  --    expone el parámetro), así que esta condición falla ahí aunque el rol
+  --    tenga BYPASSRLS y la conexión llegue desde una IP privada del pooler.
+  v_secreto_local := coalesce(current_setting('app.settings.jwt_secret', true), '')
+                   = 'super-secret-jwt-token-with-at-least-32-characters-long';
+
+  -- La huella solo es verdadera si se cumplen las CUATRO condiciones.
   v_huella_local :=
         v_sesion_privilegiada
     AND v_superusuario
-    AND v_cliente_local;
+    AND v_cliente_local
+    AND v_secreto_local;
 
   -- Diagnóstico para quien mira la salida del reset (T1): los tres valores
   -- evaluados y el veredicto. `coalesce(..., '<NULL>')` evita confundir un
   -- valor ausente con una cadena vacía. Se emite también en cada revalidación
   -- de bloque, así el diagnóstico sigue siendo visible línea a línea.
   RAISE NOTICE
-    'demo(guardia): current_user=%, is_superuser=%, inet_client_addr=%, huella_local=%',
+    'demo(guardia): current_user=%, is_superuser=%, inet_client_addr=%, secreto_jwt_local=%, huella_local=%',
     coalesce(v_current_user, '<NULL>'),
     coalesce(v_is_superuser, '<NULL>'),
     coalesce(v_client_addr::text, '<NULL>'),
+    v_secreto_local,
     v_huella_local;
 
   IF v_huella_local IS NOT TRUE THEN
     RAISE EXCEPTION
       'demo: entorno no local o no confirmable — no se sembró ningún dato de demostración'
       USING HINT = 'La demo solo se siembra en el entorno local de Supabase '
-                   '(sesión privilegiada + is_superuser=on + conexión loopback/RFC1918). '
+                   '(sesión privilegiada + superusuario o BYPASSRLS + conexión loopback/RFC1918 '
+                   '+ secreto JWT por defecto de la CLI). '
                    'No existe parámetro para forzar la escritura.';
   END IF;
 END;

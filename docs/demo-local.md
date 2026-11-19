@@ -6,8 +6,8 @@ La demo de InmobiliariaPY son cinco cuentas de prueba, dos perfiles de vendedor 
 inmuebles que se crean **solo** al recrear la base local con `supabase db reset`. Nunca se
 siembra fuera de local: el archivo de sembrado empieza con una guardia que, antes de
 escribir nada, calcula una **huella heurística del entorno** (sesión privilegiada,
-superusuario o rol con `BYPASSRLS` —en Supabase local el reset corre como `postgres`— y conexión desde loopback o red privada). Si no puede confirmar las
-tres condiciones, **aborta el reset con un error** y no deja ningún dato de demo: es un
+superusuario o rol con `BYPASSRLS` —en Supabase local el reset corre como `postgres`— conexión desde loopback o red privada y el secreto JWT por defecto que solo configura la CLI de Supabase en local). Si no puede confirmar las
+cuatro condiciones, **aborta el reset con un error** y no deja ningún dato de demo: es un
 fallo cerrado (*fail-closed*), el comportamiento esperado y no un bug. La huella es una
 heurística, no una garantía criptográfica; no existe parámetro para forzarla (para
 saltarla habría que editar el archivo).
