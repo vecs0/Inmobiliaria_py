@@ -1,4 +1,4 @@
-# DOC_PROYECTO.md — InmobiliariaPY V3
+# Documentación del proyecto — InmobiliariaPY V3
 > Documentación técnica viva. Se actualiza automáticamente al completar cada tarea.
 > Última actualización: 2026-05-20
 
@@ -320,8 +320,8 @@ npx supabase db push
 # Desarrollo
 npm run dev          # → http://localhost:3000
 
-# Seed de usuarios de prueba
-node scripts/seed-demo-users.mjs
+# Recrear la base local (migraciones + agentes + demo)
+npx supabase db reset   # la demo se siembra sola; ver docs/demo-local.md
 ```
 
 **Variables de entorno requeridas:**
@@ -358,7 +358,7 @@ NEXT_PUBLIC_APP_URL=
 ---
 
 ## ✅ Auditoría profunda + remediación (80–85%) — 2026-10-17
-- **Archivos creados/modificados:** ~190 archivos. Ver `PLAN_REMEDIACION.md` (paquetes A–E). Claves: `src/proxy.ts` (ex `middleware.ts`), `src/lib/supabase/admin.ts`, `supabase/migrations/20260101000000_baseline_missing.sql`, `20261017000100_security_hardening.sql`, `20261017000200_rpc_stripe_new_tables.sql`, `20261017000300_storage_property_photos.sql`, `20261017000400_seller_profile_on_signup.sql`, `src/app/api/favorites/`, `src/app/api/cron/{expire-boosts,reset-api-keys}/`, `src/lib/import/`, `src/lib/ai/embeddings.ts`, `src/components/map/`, `src/app/{api-docs,sitemap.ts,robots.ts,not-found,error,global-error,loading}`, `src/app/auth/{callback,update-password}`, `src/app/admin/actions.ts`. SQL sueltos movidos a `supabase/legacy/`. Eliminados `legacy-ui/` y componentes muertos.
+- **Archivos creados/modificados:** ~190 archivos. Ver `docs/plan-remediacion.md` (paquetes A–E). Claves: `src/proxy.ts` (ex `middleware.ts`), `src/lib/supabase/admin.ts`, `supabase/migrations/20260101000000_baseline_missing.sql`, `20261017000100_security_hardening.sql`, `20261017000200_rpc_stripe_new_tables.sql`, `20261017000300_storage_property_photos.sql`, `20261017000400_seller_profile_on_signup.sql`, `src/app/api/favorites/`, `src/app/api/cron/{expire-boosts,reset-api-keys}/`, `src/lib/import/`, `src/lib/ai/embeddings.ts`, `src/components/map/`, `src/app/{api-docs,sitemap.ts,robots.ts,not-found,error,global-error,loading}`, `src/app/auth/{callback,update-password}`, `src/app/admin/actions.ts`. SQL sueltos movidos a `supabase/legacy/`. Eliminados `legacy-ui/` y componentes muertos.
 - **Qué hace:** cierra escalada de rol (signup/admin y UPDATE de role), boosts/planes autoasignables, SSRF e import sin auth, relay de spam en contacto. Webhook Stripe con service role + idempotencia (`stripe_events`) + eventos `invoice.*`. Contacto genera leads y notifica al vendedor; favoritos, borrar/pausar, analíticas y gráficos con datos reales; filtros, paginación y mapa Leaflet reales; sin datos mock en producción; i18n montado; panel responsive; crons en `vercel.json`; push real con `web-push`.
 - **Cómo se usa:** `supabase db push --include-all` → `supabase gen types typescript --linked` → cargar env de `.env.example` en Vercel → webhook Stripe a `/api/stripe/webhook`.
 - **Decisiones técnicas:** modelo canónico `listings` + `property_entities` + `seller_profiles` (`properties` queda legacy, sin lecturas). Service role solo vía `createAdminClient()` lazy. Clientes externos lazy (build sin env no rompe). Baseline con fecha temprana para que una DB vacía pueda reconstruirse. Región Vercel `gru1`.

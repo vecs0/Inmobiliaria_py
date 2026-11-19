@@ -84,18 +84,18 @@ inmobiliaria-py/
 ├── postcss.config.mjs                 # Configuración de PostCSS
 ├── tailwind.config.ts                 # Configuración de Tailwind CSS (Aesthetic V2)
 ├── tsconfig.json                      # Configuración de TypeScript
-├── Guía Completa de Implementación.md # Guía teórica de implementación del monorepo
-├── InmobiliariaPY_Documentacion_Completa.md # Esta documentación técnica integral
+├── docs/                              # Documentación técnica (esta guía, auditoría, demo local)
 │
 ├── legacy-ui/                         # Artefactos e interfaz legada (V2 original)
 │
 ├── scripts/                           # Scripts de soporte técnico
-│   └── seed-demo-users.mjs            # Inyecta perfiles de prueba en la DB
+│   └── verify-supabase.mjs            # Verifica tablas/vistas de Supabase
 │
 ├── supabase/                          # Backend de la base de datos Supabase
 │   ├── config.toml                    # Configuración del CLI de Supabase
 │   ├── schema.sql                     # Estructura del esquema base
-│   ├── seed.sql                       # Datos semilla de prueba
+│   ├── seed.sql                       # Agentes de referencia del seed local
+│   ├── seeds/demo.sql                 # Demo local (corre tras seed.sql, con guardia)
 │   ├── verify-tables.sql              # Script SQL de verificación de integridad
 │   ├── MIGRACIONES.md                 # Guía para aplicar las migraciones
 │   └── migrations/                    # Archivos SQL cronológicos de migraciones oficiales

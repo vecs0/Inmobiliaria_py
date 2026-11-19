@@ -44,9 +44,15 @@ Después de aplicar:
 
 ```bash
 supabase start
-supabase db reset   # aplica todo en orden + seed.sql
+supabase db reset
 ```
-Requiere la extensión `vector` (incluida en Supabase).
+El reset aplica, en orden:
+1. todas las migraciones de `supabase/migrations/` (orden por prefijo de fecha);
+2. `supabase/seed.sql` (los 3 agentes de referencia);
+3. `supabase/seeds/demo.sql` (la demo local: cuentas, vendedores, publicaciones, destacadas;
+   protegida por una guardia que aborta fuera del entorno local — ver `docs/demo-local.md`).
+
+`supabase/legacy/**` **no** se aplica. Requiere la extensión `vector` (incluida en Supabase).
 
 ## Verificación rápida
 

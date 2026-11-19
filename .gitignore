@@ -47,3 +47,16 @@ yarn-error.log*
 
 # supabase cli local state
 supabase/.temp/
+
+# Herramientas de IA y flujo de trabajo personal (solo local, no se publican)
+CLAUDE.md
+AGENTS.md
+MEMORY.md
+opencode.json
+.claude/
+.opencode/
+.agents/
+specs/
+docs/constitution.md
+Guía Completa de Implementación.md
+supabase/.branches/
